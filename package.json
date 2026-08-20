@@ -9,6 +9,8 @@
   "scripts": {
     "db:up": "docker compose up -d --wait postgres",
     "db:down": "docker compose down -v",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "tsx src/db/migrate.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
