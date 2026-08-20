@@ -12,7 +12,8 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx src/db/migrate.ts",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:live": "vitest run --config vitest.live.config.ts"
   },
   "dependencies": {
     "drizzle-orm": "^0.44.5",
