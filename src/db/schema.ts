@@ -1,6 +1,5 @@
 import { sql } from "drizzle-orm";
 import {
-  bigint,
   bigserial,
   boolean,
   check,
@@ -188,8 +187,6 @@ export const commentStates = pgTable(
     /** Opaque actor id; its kind belongs to the identity service. */
     handledBy: text(),
     note: text(),
-    /** Copy of comments.ingest_seq: the inbox query filters here and orders there. */
-    ingestSeq: bigint({ mode: "bigint" }).notNull(),
     updatedAt: tstz("updated_at").notNull(),
   },
   (t) => [
@@ -198,9 +195,6 @@ export const commentStates = pgTable(
       columns: [t.tenantId, t.commentId],
       foreignColumns: [comments.tenantId, comments.id],
     }).onDelete("cascade"),
-    index()
-      .on(t.tenantId, t.ingestSeq)
-      .where(sql`handling IN ('new', 'escalated')`),
     check("state_handling", sql`${t.handling} IN ('new', 'answered', 'escalated', 'ignored')`),
     // An unhandled comment carries no record of having been handled.
     check(

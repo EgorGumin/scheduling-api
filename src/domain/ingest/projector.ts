@@ -170,8 +170,8 @@ async function seedCommentStates(
   externalIds: readonly string[],
 ): Promise<void> {
   await tx.execute(sql`
-    INSERT INTO comment_states (comment_id, tenant_id, ingest_seq, updated_at)
-    SELECT c.id, c.tenant_id, c.ingest_seq, now()
+    INSERT INTO comment_states (comment_id, tenant_id, updated_at)
+    SELECT c.id, c.tenant_id, now()
       FROM comments c
      WHERE c.channel_id = ${ctx.channelId}::uuid
        AND c.external_id = ANY(${sql.param([...externalIds])}::text[])

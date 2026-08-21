@@ -104,9 +104,8 @@ END $$;
 -- 9. A comment waiting to be handled carries no record of having been handled.
 DO $$
 BEGIN
-  INSERT INTO comment_states (comment_id, tenant_id, handling, handled_at, handled_by,
-                              ingest_seq, updated_at)
-  SELECT id, tenant_id, 'new', now(), 'human-1', ingest_seq, now()
+  INSERT INTO comment_states (comment_id, tenant_id, handling, handled_at, handled_by, updated_at)
+  SELECT id, tenant_id, 'new', now(), 'human-1', now()
     FROM comments WHERE external_id = 'at://alice/comment/1';
   RAISE EXCEPTION 'FAIL an unhandled comment was recorded as handled';
 EXCEPTION WHEN check_violation THEN
