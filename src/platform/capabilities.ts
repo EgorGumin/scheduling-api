@@ -2,8 +2,19 @@ import type { Lifecycle, Platform } from "./types.js";
 
 export type ActionName = "reply";
 
+/**
+ * Platforms disagree about what one character is: Bluesky counts grapheme
+ * clusters, most others count UTF-16 units, so the same emoji is 1 or 2. The unit
+ * is declared here rather than assumed by the caller, which is what keeps the
+ * check platform-agnostic.
+ */
+export type TextUnit = "graphemes" | "utf16";
+
 export interface TextLimits {
   readonly maxLength: number;
+  readonly counts: TextUnit;
+  /** A second, independent cap on the encoded size. `null` where none is published. */
+  readonly maxBytes: number | null;
 }
 
 export interface AttachmentLimits {

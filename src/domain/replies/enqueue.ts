@@ -6,6 +6,7 @@ import {
   type Action,
   type CredentialState,
   type PlatformManifest,
+  type TextUnit,
 } from "../../platform/capabilities.js";
 import type { Lifecycle } from "../../platform/types.js";
 
@@ -179,14 +180,23 @@ function checkShape(
   if (body.trim().length === 0) {
     return "body_empty";
   }
-  // `body.length` counts UTF-16 units, so an emoji would eat two of the platform's characters.
-  if ([...new Intl.Segmenter().segment(body)].length > op.text.maxLength) {
+  if (measure(body, op.text.counts) > op.text.maxLength) {
+    return "body_too_long";
+  }
+  // A separate cap where the platform publishes one: 300 emoji are 300 graphemes
+  // and far more than 3000 bytes, and only the platform would notice.
+  if (op.text.maxBytes !== null && new TextEncoder().encode(body).length > op.text.maxBytes) {
     return "body_too_long";
   }
   if (op.maxDepth !== null && comment.depth + 1 > op.maxDepth) {
     return "depth_exceeded";
   }
   return null;
+}
+
+/** In the unit the platform counts in, which it declares rather than us assuming. */
+function measure(body: string, unit: TextUnit): number {
+  return unit === "graphemes" ? [...new Intl.Segmenter().segment(body)].length : body.length;
 }
 
 async function loadComment(

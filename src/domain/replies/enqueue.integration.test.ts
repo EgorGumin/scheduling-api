@@ -49,6 +49,22 @@ describe("enqueue", () => {
     expect(result).toMatchObject({ outcome: "rejected", reason: "body_too_long" });
   });
 
+  it("rejects a body that fits the character count but not the byte cap", async () => {
+    const reply = fakeManifest.operations.reply;
+    const capped = {
+      ...fakeManifest,
+      operations: {
+        reply: reply.supported ? { ...reply, text: { ...reply.text, maxBytes: 8 } } : reply,
+      },
+    };
+
+    // Three graphemes against a limit of a hundred, twelve bytes against eight:
+    // only the platform's own unit says whether this fits.
+    const result = await enqueueReply(db, { bluesky: capped }, replyRequest(fixture, { body: "👍👍👍" }));
+
+    expect(result).toMatchObject({ outcome: "rejected", reason: "body_too_long" });
+  });
+
   it("rejects a reply that would exceed the platform's nesting limit", async () => {
     await db.execute(sql`UPDATE comments SET depth = 1 WHERE id = ${fixture.commentId}::uuid`);
     const result = await queue();

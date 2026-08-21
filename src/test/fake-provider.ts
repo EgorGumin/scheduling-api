@@ -19,7 +19,7 @@ export const fakeManifest: PlatformManifest = {
       supported: true,
       requiredScopes: ["instagram_manage_comments"],
       actionableForHours: null,
-      text: { maxLength: 100 },
+      text: { maxLength: 100, counts: "graphemes", maxBytes: null },
       attachments: { maxCount: 0, mimeTypes: [], maxBytes: 0 },
       maxDepth: 1,
     },
@@ -51,6 +51,8 @@ export class FakeProvider implements CommentProvider {
   replyAttempts = 0;
   listCalls = 0;
   readonly posted: ReplyCommand[] = [];
+  /** What each reply identifier already landed as, so a repeat answers the same. */
+  private readonly sent = new Map<string, PostedReply>();
 
   constructor(
     private script: FakeScript = {},
@@ -100,15 +102,26 @@ export class FakeProvider implements CommentProvider {
   }
 
   async postReply(ctx: ChannelContext, cmd: ReplyCommand): Promise<PostedReply> {
-    this.replyAttempts += 1;
     if (ctx.credentialRef === null) {
       throw new PlatformError("unauthorized", "no credential", false);
     }
+
+    // Before the failure script: a reply that already landed cannot fail, and a
+    // retry of it must not become a second one.
+    const already = this.sent.get(cmd.replyId);
+    if (already !== undefined) {
+      return already;
+    }
+
+    this.replyAttempts += 1;
     if (this.replyAttempts <= (this.script.failReplies ?? 0)) {
       throw this.script.replyError ?? new PlatformError("unavailable", "flaky", true);
     }
+
     this.posted.push(cmd);
-    return { externalId: `ext-reply-${this.posted.length}`, postedAt: new Date() };
+    const posted = { externalId: `ext-reply-${this.posted.length}`, postedAt: new Date() };
+    this.sent.set(cmd.replyId, posted);
+    return posted;
   }
 }
 

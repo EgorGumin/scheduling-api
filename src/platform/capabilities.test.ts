@@ -28,7 +28,7 @@ const withWindow = (hours: number | null): PlatformManifest => ({
       supported: true,
       requiredScopes: [],
       actionableForHours: hours,
-      text: { maxLength: 100 },
+      text: { maxLength: 100, counts: "graphemes", maxBytes: null },
       attachments: { maxCount: 0, mimeTypes: [], maxBytes: 0 },
       maxDepth: 1,
     },
@@ -41,7 +41,7 @@ describe("channel declaration", () => {
     expect(declaration.reply).toEqual({
       supported: true,
       actionableForHours: null,
-      text: { maxLength: 300 },
+      text: { maxLength: 300, counts: "graphemes", maxBytes: 3000 },
       attachments: { maxCount: 0, mimeTypes: [], maxBytes: 0 },
       maxDepth: null,
     });
@@ -50,7 +50,7 @@ describe("channel declaration", () => {
   it("carries no limits for an unsupported operation, by type", () => {
     const manifest: PlatformManifest = {
       platform: "youtube",
-          operations: { reply: { supported: false } },
+      operations: { reply: { supported: false } },
     };
     expect(declareCapabilities(manifest).reply).toEqual({ supported: false });
   });
@@ -61,7 +61,7 @@ describe("object availability", () => {
   it("is unsupported when the platform cannot do it at all", () => {
     const manifest: PlatformManifest = {
       platform: "youtube",
-          operations: { reply: { supported: false } },
+      operations: { reply: { supported: false } },
     };
     expect(resolveAction(manifest, connected, liveComment, NOW)).toEqual({
       status: "unsupported",

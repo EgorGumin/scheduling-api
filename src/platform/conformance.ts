@@ -6,6 +6,8 @@ import { PlatformError, type ChannelContext } from "./types.js";
 export interface ConformanceCase {
   readonly provider: CommentProvider;
   readonly ctx: ChannelContext;
+  /** The same channel with an account connected, so writes can be exercised. */
+  readonly connected: ChannelContext;
   /** A post the provider can answer for, with at least one comment under it. */
   readonly postExternalId: string;
   /** Shaped like the platform's identifiers, but pointing at nothing. */
@@ -84,10 +86,17 @@ export function runConformance(name: string, load: () => Promise<ConformanceCase
     expect(future.items.length).toBeLessThanOrEqual(all.items.length);
   });
 
+  it(`${name}: replying without an account is refused, not attempted`, async () => {
+    const { provider, ctx, postExternalId } = await load();
+    await expect(
+      provider.postReply(ctx, { parentExternalId: postExternalId, body: "hi", replyId: REPLY_ID }),
+    ).rejects.toMatchObject({ code: "unauthorized", retryable: false });
+  });
+
   it(`${name}: platform failures arrive as PlatformError with a retry verdict`, async () => {
-    const { provider, ctx, unknownExternalId } = await load();
+    const { provider, connected, unknownExternalId } = await load();
     try {
-      await provider.postReply(ctx, {
+      await provider.postReply(connected, {
         parentExternalId: unknownExternalId,
         body: "hi",
         replyId: REPLY_ID,
@@ -98,6 +107,44 @@ export function runConformance(name: string, load: () => Promise<ConformanceCase
       return;
     }
     // Succeeding is allowed; a raw platform exception escaping is not.
+  });
+
+  /**
+   * The manifest is a promise made to clients before they try. An adapter that
+   * declares the operation and cannot carry it out turns every `202` into a lie,
+   * and nothing else in the suite would notice.
+   */
+  it(`${name}: a declared reply actually reaches the platform`, async () => {
+    const { provider, connected, postExternalId } = await load();
+    if (!provider.manifest.operations.reply.supported) {
+      return;
+    }
+
+    const posted = await provider.postReply(connected, {
+      parentExternalId: postExternalId,
+      body: "hi",
+      replyId: REPLY_ID,
+    });
+
+    expect(posted.externalId).toBeTruthy();
+    expect(Number.isNaN(posted.postedAt.getTime())).toBe(false);
+  });
+
+  /**
+   * Delivery retries, so the same command may arrive twice. Whether the platform
+   * offers a key of its own or the adapter derives one, twice must mean once.
+   */
+  it(`${name}: the same reply sent twice lands on one object`, async () => {
+    const { provider, connected, postExternalId } = await load();
+    if (!provider.manifest.operations.reply.supported) {
+      return;
+    }
+
+    const command = { parentExternalId: postExternalId, body: "hi", replyId: REPLY_ID };
+    const first = await provider.postReply(connected, command);
+    const second = await provider.postReply(connected, command);
+
+    expect(second.externalId).toBe(first.externalId);
   });
 
   it(`${name}: the manifest agrees with what the adapter will accept`, async () => {
