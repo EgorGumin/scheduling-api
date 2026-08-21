@@ -36,6 +36,13 @@
       "when": 1787330162842,
       "tag": "0004_credential_actor",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1787335151477,
+      "tag": "0005_parent_in_same_channel",
+      "breakpoints": true
     }
   ]
 }

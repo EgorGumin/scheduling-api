@@ -59,7 +59,23 @@ EXCEPTION WHEN foreign_key_violation THEN
   RAISE NOTICE 'ok  cross-tenant reply rejected by %', 'reply_comment_in_same_channel';
 END $$;
 
--- 5. The same external comment cannot land twice in one channel.
+-- 5. A comment cannot be given a parent from another channel.
+DO $$
+BEGIN
+  INSERT INTO posts (id, tenant_id, channel_id, external_post_id)
+  VALUES ('aaaa2222-0000-0000-0000-000000000002', 'bbbbbbbb-0000-0000-0000-000000000002',
+          '22222222-2222-2222-2222-222222222222', 'at://bob/post/1');
+  INSERT INTO comments (tenant_id, channel_id, post_id, external_id, parent_id,
+                        created_at_remote, first_seen_at, last_synced_at)
+  VALUES ('bbbbbbbb-0000-0000-0000-000000000002', '22222222-2222-2222-2222-222222222222',
+          'aaaa2222-0000-0000-0000-000000000002', 'at://bob/comment/2',
+          'cccc1111-0000-0000-0000-000000000001', now(), now(), now());
+  RAISE EXCEPTION 'FAIL cross-channel parent was accepted';
+EXCEPTION WHEN foreign_key_violation THEN
+  RAISE NOTICE 'ok  cross-channel parent rejected by %', 'comment_parent';
+END $$;
+
+-- 6. The same external comment cannot land twice in one channel.
 DO $$
 BEGIN
   INSERT INTO comments (tenant_id, channel_id, post_id, external_id,
@@ -72,12 +88,12 @@ EXCEPTION WHEN unique_violation THEN
   RAISE NOTICE 'ok  duplicate external_id rejected, upsert target present';
 END $$;
 
--- 6. A read-only channel needs no credential, and the composite key tolerates the NULL.
+-- 7. A read-only channel needs no credential, and the composite key tolerates the NULL.
 INSERT INTO channels (tenant_id, platform, subject_external_id, status, credential_id)
 VALUES ('aaaaaaaa-0000-0000-0000-000000000001', 'bluesky', 'did:plc:public', 'active', NULL);
 SELECT 'ok  read-only channel accepted without credential';
 
--- 7. A channel cannot borrow an account belonging to another platform.
+-- 8. A channel cannot borrow an account belonging to another platform.
 DO $$
 BEGIN
   INSERT INTO platform_credentials (id, tenant_id, platform, credential_ref)
@@ -91,7 +107,7 @@ EXCEPTION WHEN foreign_key_violation THEN
   RAISE NOTICE 'ok  cross-platform credential rejected by %', 'channel_credential_same_tenant_and_platform';
 END $$;
 
--- 8. A status outside its vocabulary is refused by the column, not by the caller.
+-- 9. A status outside its vocabulary is refused by the column, not by the caller.
 DO $$
 BEGIN
   UPDATE comments SET lifecycle = 'archived'
@@ -101,7 +117,7 @@ EXCEPTION WHEN check_violation THEN
   RAISE NOTICE 'ok  unknown lifecycle rejected by comment_lifecycle';
 END $$;
 
--- 9. A comment waiting to be handled carries no record of having been handled.
+-- 10. A comment waiting to be handled carries no record of having been handled.
 DO $$
 BEGIN
   INSERT INTO comment_states (comment_id, tenant_id, handling, handled_at, handled_by, updated_at)

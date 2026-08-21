@@ -162,13 +162,12 @@ export const comments = pgTable(
       columns: [t.tenantId, t.channelId, t.postId],
       foreignColumns: [posts.tenantId, posts.channelId, posts.id],
     }),
-    // Not composite like the others: parent_id never arrives from outside. The
-    // projector resolves it by matching external_id within one channel, and a
-    // composite key would cost another unique index on the largest table.
+    // The parent must be in the same channel too. A null parent_id passes, so a
+    // child can arrive before the parent it points at.
     foreignKey({
       name: "comment_parent",
-      columns: [t.parentId],
-      foreignColumns: [t.id],
+      columns: [t.tenantId, t.channelId, t.parentId],
+      foreignColumns: [t.tenantId, t.channelId, t.id],
     }),
     index().on(t.tenantId, t.ingestSeq),
     index().on(t.channelId, t.ingestSeq),
