@@ -1,11 +1,12 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import type { ChannelContext } from "../types.js";
 import { PlatformError } from "../types.js";
 import { BlueskyProvider } from "./adapter.js";
+/** Verbatim AppView output, captured by `scripts/capture-fixture.ts`. */
 import fixture from "./__fixtures__/thread-with-replies.json" with { type: "json" };
 
-/** Verbatim AppView output, captured by `scripts/capture-fixture.ts`. */
 const ROOT_URI = "at://did:plc:z72i7hdynmk6r22z27h6tvur/app.bsky.feed.post/3msqpuobiwk2t";
+const ROOT_CID = "bafyreia5giteuhei7im66w7yn3pldm7h7npkmuy73fvakrpsjsz5oejdgu";
 
 const ctx: ChannelContext = {
   channelId: "chn-1",
@@ -14,6 +15,91 @@ const ctx: ChannelContext = {
   subjectExternalId: "did:plc:z72i7hdynmk6r22z27h6tvur",
   actingAs: null,
   credentialRef: null,
+};
+
+interface Call {
+  method: string;
+  host: string;
+  body?: unknown;
+}
+
+/** The host the login's DID document names, which is not the one it logged in at. */
+const PDS_HOST = "pds.example";
+const ENTRYWAY = "https://entryway.example";
+
+/** A record uri the lexicon accepts: the SDK validates what comes back. */
+const WRITTEN = "at://did:plc:us/app.bsky.feed.post/3mtjkir222222";
+const REFRESHED = "at://did:plc:us/app.bsky.feed.post/3mtjkir222223";
+
+const DID = "did:plc:us";
+
+/** A login answer, carrying the document that moves the client to the repository host. */
+const SESSION = {
+  did: DID,
+  handle: "us.example",
+  accessJwt: "access-1",
+  refreshJwt: "refresh-1",
+  active: true,
+  didDoc: {
+    id: DID,
+    service: [
+      {
+        id: "#atproto_pds",
+        type: "AtprotoPersonalDataServer",
+        serviceEndpoint: `https://${PDS_HOST}`,
+      },
+    ],
+  },
+};
+
+/**
+ * Routes each XRPC method to a canned answer and keeps every call. An answer may
+ * be a function, which is how a test makes the platform behave differently the
+ * second time.
+ */
+function writingProvider(
+  answers: Record<string, unknown | ((call: number) => Response)>,
+  calls: Call[] = [],
+): BlueskyProvider {
+  const counts = new Map<string, number>();
+  // Reads arrive as a URL, writes as a Request: the session builds one before it
+  // signs the call.
+  const fetchImpl = (async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+    const request = input instanceof Request ? input : null;
+    const url = new URL(request === null ? String(input) : request.url);
+    const method = url.pathname.replace("/xrpc/", "");
+    const sent = request === null ? init?.body : await request.text();
+    const seen = (counts.get(method) ?? 0) + 1;
+    counts.set(method, seen);
+    calls.push({
+      method,
+      host: url.hostname,
+      ...(typeof sent === "string" && sent.length > 0 && { body: JSON.parse(sent) }),
+    });
+
+    const answer = answers[method];
+    if (answer === undefined) {
+      return new Response(JSON.stringify({ error: "InvalidRequest" }), { status: 400 });
+    }
+    return typeof answer === "function"
+      ? (answer as (call: number) => Response)(seen)
+      : json(answer);
+  }) as unknown as typeof fetch;
+
+  return new BlueskyProvider({ fetchImpl, pds: { serviceUrl: ENTRYWAY, fetchImpl } });
+}
+
+function json(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { "content-type": "application/json" },
+  });
+}
+
+const CONNECTED: ChannelContext = {
+  ...ctx,
+  actingAs: DID,
+  credentialRef: "secret://env/TEST_APP_PASSWORD",
 };
 
 function providerReturning(body: unknown, status = 200): BlueskyProvider {
@@ -26,7 +112,28 @@ function providerReturning(body: unknown, status = 200): BlueskyProvider {
   });
 }
 
+/** A uri of its own, so the reply carrying the embed is easy to pick out of the page. */
+const EMBED_URI = "at://did:plc:z72i7hdynmk6r22z27h6tvur/app.bsky.feed.post/3msqembed222";
+
+const THUMB = "https://cdn.example/s.jpg";
+const FULL = "https://cdn.example/l.jpg";
+
+/** The captured thread with one more reply, cloned from a real one and given an embed. */
+function threadWithEmbed(embed: unknown): unknown {
+  const template = fixture.thread.replies[0]!;
+  const carrying = {
+    ...template,
+    post: { ...template.post, uri: EMBED_URI, embed },
+    replies: [],
+  };
+  return { thread: { ...fixture.thread, replies: [...fixture.thread.replies, carrying] } };
+}
+
 describe("bluesky adapter", () => {
+  beforeEach(() => {
+    process.env["TEST_APP_PASSWORD"] = "app-pass";
+  });
+
   it("flattens a nested thread into comments carrying their parent reference", async () => {
     const page = await providerReturning(fixture).listComments(ctx, {
       postExternalId: ROOT_URI,
@@ -80,16 +187,80 @@ describe("bluesky adapter", () => {
     expect(page.items.length).toBeGreaterThan(0);
   });
 
-  it("keeps media as references the platform can serve", async () => {
-    const page = await providerReturning(fixture).listComments(ctx, {
+  /**
+   * The captured thread carries an image on the root post, which the port reports
+   * as a post rather than a comment, so nothing here exercised the mapping. Each
+   * case hangs a real reply node off the thread with one embed swapped in.
+   */
+  it.each([
+    [
+      "an image, with its alt text",
+      {
+        $type: "app.bsky.embed.images#view",
+        images: [
+          { thumb: THUMB, fullsize: FULL, alt: "a guitar" },
+        ],
+      },
+      [{ type: "image", url: FULL, altText: "a guitar" }],
+    ],
+    [
+      "an image whose alt text the author left empty",
+      {
+        $type: "app.bsky.embed.images#view",
+        images: [
+          { thumb: THUMB, fullsize: FULL, alt: "" },
+        ],
+      },
+      [{ type: "image", url: FULL }],
+    ],
+    [
+      "a video, by the playlist that plays it",
+      { $type: "app.bsky.embed.video#view", cid: ROOT_CID, playlist: "https://cdn.example/v.m3u8" },
+      [{ type: "video", url: "https://cdn.example/v.m3u8" }],
+    ],
+    [
+      "a link card, by the address it points at",
+      {
+        $type: "app.bsky.embed.external#view",
+        external: { uri: "https://example.com/post", title: "Title", description: "Description" },
+      },
+      [{ type: "link_preview", url: "https://example.com/post" }],
+    ],
+    [
+      "the attachment of a quote post, not the quoted record",
+      {
+        $type: "app.bsky.embed.recordWithMedia#view",
+        record: {
+          $type: "app.bsky.embed.record#view",
+          record: { $type: "app.bsky.embed.record#viewNotFound", uri: ROOT_URI, notFound: true },
+        },
+        media: {
+          $type: "app.bsky.embed.images#view",
+          images: [
+          { thumb: THUMB, fullsize: FULL, alt: "" },
+        ],
+        },
+      },
+      [{ type: "image", url: FULL }],
+    ],
+  ])("maps %s", async (_case, embed, expected) => {
+    const page = await providerReturning(threadWithEmbed(embed)).listComments(ctx, {
       postExternalId: ROOT_URI,
     });
-    for (const comment of page.items) {
-      for (const media of comment.media) {
-        expect(media.url.startsWith("http")).toBe(true);
-        expect(media.type).not.toBe("unknown");
-      }
-    }
+
+    const commented = page.items.find((comment) => comment.externalId === EMBED_URI);
+    expect(commented?.media).toEqual(expected);
+  });
+
+  it("reports no media for a quote post, which carries a record and no attachment", async () => {
+    const page = await providerReturning(
+      threadWithEmbed({
+        $type: "app.bsky.embed.record#view",
+        record: { $type: "app.bsky.embed.record#viewNotFound", uri: ROOT_URI, notFound: true },
+      }),
+    ).listComments(ctx, { postExternalId: ROOT_URI });
+
+    expect(page.items.find((comment) => comment.externalId === EMBED_URI)?.media).toEqual([]);
   });
 
   it("refuses to list channel-wide, which this platform cannot do", async () => {
@@ -138,7 +309,192 @@ describe("bluesky adapter", () => {
       providerReturning(fixture).postReply(ctx, {
         parentExternalId: ROOT_URI,
         body: "hello",
+        replyId: "01a01fc6-0000-7000-8000-000000000001",
       }),
     ).rejects.toMatchObject({ code: "unauthorized" });
+  });
+
+  it("names the record from the reply id, which is what lets a retry rewrite it", async () => {
+    const sent: Call[] = [];
+    const provider = writingProvider(
+      {
+        "com.atproto.server.createSession": SESSION,
+        "app.bsky.feed.getPostThread": fixture,
+        "com.atproto.repo.putRecord": { uri: `${ROOT_URI}x`, cid: ROOT_CID },
+      },
+      sent,
+    );
+
+    const posted = await provider.postReply(CONNECTED, {
+      parentExternalId: ROOT_URI,
+      body: "on it",
+      replyId: "01a01fc6-0000-7000-8000-000000000001",
+    });
+
+    expect(posted.externalId).toBe(`${ROOT_URI}x`);
+    expect(sent).toContainEqual({
+      method: "com.atproto.repo.putRecord",
+      host: PDS_HOST,
+      body: {
+        repo: DID,
+        collection: "app.bsky.feed.post",
+        rkey: "3mtjkir222222",
+        record: {
+          $type: "app.bsky.feed.post",
+          text: "on it",
+          createdAt: expect.any(String),
+          reply: {
+            parent: { uri: ROOT_URI, cid: ROOT_CID },
+            root: { uri: ROOT_URI, cid: ROOT_CID },
+          },
+        },
+      },
+    });
+  });
+
+  it("keeps the thread's root when answering a reply rather than the post", async () => {
+    const sent: Call[] = [];
+    const nested = fixture.thread.replies[0]!;
+    const provider = writingProvider(
+      {
+        "com.atproto.server.createSession": SESSION,
+        "app.bsky.feed.getPostThread": { thread: nested },
+        "com.atproto.repo.putRecord": { uri: WRITTEN, cid: ROOT_CID },
+      },
+      sent,
+    );
+
+    await provider.postReply(CONNECTED, {
+      parentExternalId: nested.post.uri,
+      body: "deeper",
+      replyId: "01a01fc6-0000-7000-8000-000000000002",
+    });
+
+    const record = (sent.at(-1) as { body: { record: { reply: unknown } } }).body.record;
+    expect(record.reply).toEqual({
+      parent: { uri: nested.post.uri, cid: nested.post.cid },
+      root: { uri: ROOT_URI, cid: ROOT_CID },
+    });
+  });
+
+  it("writes to the host the account's DID document names", async () => {
+    const calls: Call[] = [];
+    const provider = writingProvider(
+      {
+        "com.atproto.server.createSession": SESSION,
+        "app.bsky.feed.getPostThread": fixture,
+        "com.atproto.repo.putRecord": { uri: WRITTEN, cid: ROOT_CID },
+      },
+      calls,
+    );
+
+    await provider.postReply(CONNECTED, {
+      parentExternalId: ROOT_URI,
+      body: "on it",
+      replyId: "01a01fc6-0000-7000-8000-000000000010",
+    });
+
+    // The login happens at the entryway, which answers with the account's
+    // document; every call after that has to reach the host that document names.
+    const login = calls.find((call) => call.method === "com.atproto.server.createSession");
+    expect(login?.host).toBe(new URL(ENTRYWAY).hostname);
+    expect(calls.find((call) => call.method === "com.atproto.repo.putRecord")?.host).toBe(PDS_HOST);
+  });
+
+  it("logs in once for several replies", async () => {
+    const calls: Call[] = [];
+    const provider = writingProvider(
+      {
+        "com.atproto.server.createSession": SESSION,
+        "app.bsky.feed.getPostThread": fixture,
+        "com.atproto.repo.putRecord": { uri: WRITTEN, cid: ROOT_CID },
+      },
+      calls,
+    );
+
+    for (const suffix of ["11", "12", "13"]) {
+      await provider.postReply(CONNECTED, {
+        parentExternalId: ROOT_URI,
+        body: "on it",
+        replyId: `01a01fc6-0000-7000-8000-0000000000${suffix}`,
+      });
+    }
+
+    // Thirty logins per five minutes is the published ceiling for one account,
+    // which a busy thread would reach on its own if every reply logged in.
+    const logins = calls.filter((call) => call.method === "com.atproto.server.createSession");
+    expect(logins).toHaveLength(1);
+  });
+
+  it("refreshes an expired token instead of logging in again", async () => {
+    const calls: Call[] = [];
+    const provider = writingProvider(
+      {
+        "com.atproto.server.createSession": SESSION,
+        "com.atproto.server.refreshSession": {
+          ...SESSION,
+          accessJwt: "access-2",
+          refreshJwt: "refresh-2",
+        },
+        "app.bsky.feed.getPostThread": fixture,
+        "com.atproto.repo.putRecord": (call: number) =>
+          call === 1
+            ? json({ error: "ExpiredToken" }, 401)
+            : json({ uri: REFRESHED, cid: ROOT_CID }),
+      },
+      calls,
+    );
+
+    const posted = await provider.postReply(CONNECTED, {
+      parentExternalId: ROOT_URI,
+      body: "on it",
+      replyId: "01a01fc6-0000-7000-8000-000000000014",
+    });
+
+    // The password is spent once. Everything after that runs on the refresh token,
+    // which is what keeps a busy account away from the login ceiling.
+    expect(posted.externalId).toBe(REFRESHED);
+    expect(calls.filter((c) => c.method === "com.atproto.server.createSession")).toHaveLength(1);
+    expect(calls.filter((c) => c.method === "com.atproto.server.refreshSession")).toHaveLength(1);
+  });
+
+  it("reports a refused password without trying again", async () => {
+    const calls: Call[] = [];
+    const provider = writingProvider(
+      {
+        "app.bsky.feed.getPostThread": fixture,
+        "com.atproto.server.createSession": () =>
+          json({ error: "AuthenticationRequired" }, 401),
+      },
+      calls,
+    );
+
+    await expect(
+      provider.postReply(CONNECTED, {
+        parentExternalId: ROOT_URI,
+        body: "hi",
+        replyId: "01a01fc6-0000-7000-8000-000000000003",
+      }),
+    ).rejects.toMatchObject({ code: "unauthorized", retryable: false });
+
+    // A withdrawn password is answered once, not retried: only an expired access
+    // token is recoverable, and that path goes through the refresh token.
+    expect(calls.filter((c) => c.method === "com.atproto.server.createSession")).toHaveLength(1);
+  });
+
+  it("fails a reply when the deployment never set the secret", async () => {
+    delete process.env["TEST_APP_PASSWORD"];
+    const provider = writingProvider({
+      "app.bsky.feed.getPostThread": fixture,
+      "com.atproto.server.createSession": SESSION,
+    });
+
+    await expect(
+      provider.postReply(CONNECTED, {
+        parentExternalId: ROOT_URI,
+        body: "hi",
+        replyId: "01a01fc6-0000-7000-8000-000000000004",
+      }),
+    ).rejects.toMatchObject({ code: "unavailable", retryable: false });
   });
 });

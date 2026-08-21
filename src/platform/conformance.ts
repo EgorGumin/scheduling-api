@@ -12,6 +12,9 @@ export interface ConformanceCase {
   readonly unknownExternalId: string;
 }
 
+/** A reply identifier, since the port promises one and adapters may derive a key from it. */
+const REPLY_ID = "01a01fc6-0000-7000-8000-000000000001";
+
 /**
  * Every adapter has to behave the same way in a few respects: a comment
  * belongs to the post that was asked for, identifiers do not repeat, dates parse,
@@ -84,7 +87,11 @@ export function runConformance(name: string, load: () => Promise<ConformanceCase
   it(`${name}: platform failures arrive as PlatformError with a retry verdict`, async () => {
     const { provider, ctx, unknownExternalId } = await load();
     try {
-      await provider.postReply(ctx, { parentExternalId: unknownExternalId, body: "hi" });
+      await provider.postReply(ctx, {
+        parentExternalId: unknownExternalId,
+        body: "hi",
+        replyId: REPLY_ID,
+      });
     } catch (error) {
       expect(error).toBeInstanceOf(PlatformError);
       expect(typeof (error as PlatformError).retryable).toBe("boolean");

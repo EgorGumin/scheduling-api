@@ -85,6 +85,7 @@ export async function deliverReply(
     posted = await provider.postReply(ctx, {
       parentExternalId: reply.parent_external_id,
       body: reply.body,
+      replyId: reply.id,
     });
   } catch (error) {
     await recordFailure(db, reply, error, attempt);

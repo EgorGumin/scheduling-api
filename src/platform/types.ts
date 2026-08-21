@@ -77,6 +77,12 @@ export interface ListQuery {
 export interface ReplyCommand {
   readonly parentExternalId: string;
   readonly body: string;
+  /**
+   * The reply's own identifier, a UUID, the same on every attempt. A platform
+   * that lets the caller name the record derives that name from this, so a retry
+   * after a lost answer rewrites the record instead of posting a second one.
+   */
+  readonly replyId: string;
 }
 
 export interface PostedReply {

@@ -20,10 +20,14 @@
     "worker": "tsx src/worker.ts"
   },
   "dependencies": {
+    "@atproto/api": "^0.20.41",
+    "@atproto/common-web": "^0.5.9",
+    "@atproto/syntax": "^0.7.4",
     "drizzle-orm": "^0.44.5",
     "fastify": "^5.12.1",
     "graphile-worker": "^0.17.3",
     "postgres": "^3.4.7",
+    "uuid": "^14.0.2",
     "zod": "^4.4.3"
   },
   "devDependencies": {
