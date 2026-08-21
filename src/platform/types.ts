@@ -28,11 +28,7 @@ export interface RawComment {
   readonly editedAtRemote: Date | null;
   readonly remoteVersion: Date | null;
   readonly lifecycle: Lifecycle;
-  /**
-   * `null` when the source cannot see it. A repository commit carries no viewer
-   * state, so a pushed event says nothing about replyability and must not
-   * overwrite what a read of the object established.
-   */
+  /** `null` when the read carried no viewer state to report it. */
   readonly replyDisabled: boolean | null;
 }
 
