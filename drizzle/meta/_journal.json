@@ -22,6 +22,20 @@
       "when": 1787312032482,
       "tag": "0002_drop_state_ingest_seq",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1787330152309,
+      "tag": "0003_drop_identity_name",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1787330162842,
+      "tag": "0004_credential_actor",
+      "breakpoints": true
     }
   ]
 }

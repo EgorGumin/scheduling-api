@@ -27,7 +27,12 @@ export const platformCredentials = pgTable(
     id: newId(),
     tenantId: uuid().notNull(),
     platform: text().notNull(),
-    identityName: text(),
+    /**
+     * The account this credential speaks as. Serves as the login identifier, and
+     * as the author id that marks a comment ours when it was written outside this
+     * system. NULL until a connection has established it.
+     */
+    actorExternalId: text(),
     credentialRef: text().notNull(),
     expiresAt: tstz("expires_at"),
     /** NULL means the platform does not report scope composition. */

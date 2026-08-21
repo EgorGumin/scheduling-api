@@ -25,6 +25,7 @@ export async function seedReplyFixture(db: Database, withCredential = true): Pro
     tenantId: seeded.tenantId,
     platform: "bluesky" as const,
     subjectExternalId: "did:plc:test",
+    actingAs: withCredential ? "did:plc:test" : null,
     credentialRef: withCredential ? "secret://demo" : null,
   };
   const postId = await seedPost(db, seeded);

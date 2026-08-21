@@ -51,7 +51,13 @@ export interface ChannelContext {
   readonly channelId: string;
   readonly tenantId: string;
   readonly platform: Platform;
+  /** Whose posts this channel watches. Not necessarily the account we speak as. */
   readonly subjectExternalId: string;
+  /**
+   * The account we act as here, in the platform's own identifiers. Null on a
+   * channel with no connected account, where we act as nobody and only read.
+   */
+  readonly actingAs: string | null;
   readonly credentialRef: string | null;
 }
 

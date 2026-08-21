@@ -53,6 +53,9 @@ async function upsertComment(
 ): Promise<"inserted" | "updated" | "skipped"> {
   const media = comment.media.length === 0 ? null : JSON.stringify(comment.media);
 
+  // The owner answering from the platform's own app
+  const ownVoice = ctx.actingAs !== null && comment.author?.externalId === ctx.actingAs;
+
   const rows = await tx.execute<{ inserted: boolean }>(sql`
     WITH parent AS (
       SELECT id, depth FROM comments
@@ -78,7 +81,7 @@ async function upsertComment(
            ${comment.author?.displayName ?? null},
            ${comment.author?.handle ?? null},
            ${comment.body}, ${media}::jsonb,
-           EXISTS (SELECT 1 FROM echo),
+           EXISTS (SELECT 1 FROM echo) OR ${ownVoice},
            ${comment.lifecycle},
            COALESCE(${comment.replyDisabled}::boolean, false),
            ${comment.createdAtRemote.toISOString()}::timestamptz,

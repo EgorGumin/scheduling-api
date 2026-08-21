@@ -31,6 +31,7 @@ async function setUp(withCredential: boolean): Promise<void> {
       tenantId,
       platform: "bluesky",
       subjectExternalId: "did:plc:test",
+      actingAs: withCredential ? "did:plc:test" : null,
       credentialRef: withCredential ? "secret://demo" : null,
     },
     postId,

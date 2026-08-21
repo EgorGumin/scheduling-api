@@ -13,6 +13,7 @@ function ctxFor(platform: ChannelContext["platform"]): ChannelContext {
     tenantId: "tnt-conformance",
     platform,
     subjectExternalId: "subject",
+    actingAs: null,
     credentialRef: null,
   };
 }

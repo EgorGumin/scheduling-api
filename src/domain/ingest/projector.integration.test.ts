@@ -18,6 +18,7 @@ beforeEach(async () => {
     tenantId: seeded.tenantId,
     platform: "bluesky",
     subjectExternalId: "did:plc:test",
+    actingAs: null,
     credentialRef: null,
   };
   postId = await seedPost(db, seeded);
@@ -97,6 +98,26 @@ describe("projector", () => {
       sql`SELECT depth FROM comments WHERE external_id = ${`n${depth - 1}`}`,
     );
     expect(deepest!.depth).toBe(depth - 1);
+  });
+
+  it("takes a comment written by the account we speak as for our own", async () => {
+    const mine = makeComment({ externalId: "mine", author: { externalId: "did:plc:us", displayName: "Us", handle: "us" } });
+    const theirs = makeComment({ externalId: "theirs" });
+
+    await projectComments(db, { ...ctx, actingAs: "did:plc:us" }, postId, [mine, theirs]);
+
+    const stored = await rows<{ external_id: string; is_outbound: boolean; handling: string | null }>(
+      sql`SELECT c.external_id, c.is_outbound, s.handling
+            FROM comments c LEFT JOIN comment_states s ON s.comment_id = c.id
+           ORDER BY c.external_id`,
+    );
+
+    // The owner answering from the platform's own app is not a comment awaiting
+    // a decision, so it is neither queued nor marked as ours to triage.
+    expect(stored).toEqual([
+      { external_id: "mine", is_outbound: true, handling: null },
+      { external_id: "theirs", is_outbound: false, handling: "new" },
+    ]);
   });
 
   it("is idempotent: a second pass inserts nothing and keeps cursors stable", async () => {

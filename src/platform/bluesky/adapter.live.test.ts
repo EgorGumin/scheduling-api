@@ -18,6 +18,7 @@ const ctx: ChannelContext = {
   tenantId: "tnt-live",
   platform: "bluesky",
   subjectExternalId: ACCOUNT,
+  actingAs: null,
   credentialRef: null,
 };
 

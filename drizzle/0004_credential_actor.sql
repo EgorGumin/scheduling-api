@@ -1,0 +1,1 @@
+ALTER TABLE "platform_credentials" ADD COLUMN "actor_external_id" text;

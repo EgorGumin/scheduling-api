@@ -189,6 +189,7 @@ async function loadChannel(db: Database, channelId: string): Promise<ChannelCont
       tenantId: channels.tenantId,
       platform: sql<ChannelContext["platform"]>`${channels.platform}`,
       subjectExternalId: channels.subjectExternalId,
+      actingAs: platformCredentials.actorExternalId,
       credentialRef: platformCredentials.credentialRef,
     })
     .from(channels)

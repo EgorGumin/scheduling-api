@@ -1,0 +1,1 @@
+ALTER TABLE "platform_credentials" DROP COLUMN "identity_name";

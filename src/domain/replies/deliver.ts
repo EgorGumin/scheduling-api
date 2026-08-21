@@ -40,6 +40,7 @@ type ReplyRow = {
   platform: ChannelContext["platform"];
   subject_external_id: string;
   credential_id: string | null;
+  acting_as: string | null;
   credential_ref: string | null;
 };
 
@@ -75,6 +76,7 @@ export async function deliverReply(
     tenantId: reply.tenant_id,
     platform: reply.platform,
     subjectExternalId: reply.subject_external_id,
+    actingAs: reply.acting_as,
     credentialRef: reply.credential_ref,
   };
 
@@ -196,6 +198,7 @@ async function loadReply(db: Database, replyId: string): Promise<ReplyRow | null
       platform: sql<ReplyRow["platform"]>`${channels.platform}`,
       subject_external_id: channels.subjectExternalId,
       credential_id: channels.credentialId,
+      acting_as: platformCredentials.actorExternalId,
       credential_ref: platformCredentials.credentialRef,
     })
     .from(outboundReplies)
