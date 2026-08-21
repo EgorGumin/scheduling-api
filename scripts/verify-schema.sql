@@ -19,11 +19,10 @@ VALUES ('aaaa1111-0000-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-0000000
         '11111111-1111-1111-1111-111111111111', 'at://alice/post/1');
 
 INSERT INTO comments (id, tenant_id, channel_id, post_id, external_id,
-                      created_at_remote, first_seen_at, last_synced_at,
-                      purge_after)
+                      created_at_remote, first_seen_at, last_synced_at)
 VALUES ('cccc1111-0000-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000001',
         '11111111-1111-1111-1111-111111111111', 'aaaa1111-0000-0000-0000-000000000001',
-        'at://alice/comment/1', now(), now(), now(), now() + interval '45 days');
+        'at://alice/comment/1', now(), now(), now());
 
 \echo '--- checks ---'
 
@@ -39,11 +38,10 @@ SELECT CASE WHEN (SELECT count(DISTINCT ingest_seq) = count(*) FROM comments)
 DO $$
 BEGIN
   INSERT INTO comments (tenant_id, channel_id, post_id, external_id,
-                        created_at_remote, first_seen_at, last_synced_at,
-                        purge_after)
+                        created_at_remote, first_seen_at, last_synced_at)
   VALUES ('bbbbbbbb-0000-0000-0000-000000000002', '22222222-2222-2222-2222-222222222222',
           'aaaa1111-0000-0000-0000-000000000001', 'at://bob/comment/1',
-          now(), now(), now(), now() + interval '45 days');
+          now(), now(), now());
   RAISE EXCEPTION 'FAIL cross-tenant post reference was accepted';
 EXCEPTION WHEN foreign_key_violation THEN
   RAISE NOTICE 'ok  cross-tenant post reference rejected by %', 'comment_post_in_same_channel';
@@ -65,11 +63,10 @@ END $$;
 DO $$
 BEGIN
   INSERT INTO comments (tenant_id, channel_id, post_id, external_id,
-                        created_at_remote, first_seen_at, last_synced_at,
-                        purge_after)
+                        created_at_remote, first_seen_at, last_synced_at)
   VALUES ('aaaaaaaa-0000-0000-0000-000000000001', '11111111-1111-1111-1111-111111111111',
           'aaaa1111-0000-0000-0000-000000000001', 'at://alice/comment/1',
-          now(), now(), now(), now() + interval '45 days');
+          now(), now(), now());
   RAISE EXCEPTION 'FAIL duplicate external_id was accepted';
 EXCEPTION WHEN unique_violation THEN
   RAISE NOTICE 'ok  duplicate external_id rejected, upsert target present';
@@ -115,18 +112,5 @@ BEGIN
 EXCEPTION WHEN check_violation THEN
   RAISE NOTICE 'ok  handled metadata rejected on a new comment';
 END $$;
-
--- 10. Retention redacts content and keeps the row, so references survive.
-UPDATE comments SET purge_after = now() - interval '1 day'
- WHERE id = 'cccc1111-0000-0000-0000-000000000001';
-UPDATE comments
-   SET body = NULL, author_display_name = NULL, author_handle = NULL,
-       author_external_id = NULL, media = NULL, content_purged_at = now()
- WHERE purge_after <= now() AND content_purged_at IS NULL;
-SELECT CASE WHEN (SELECT count(*) FROM comments
-                   WHERE id = 'cccc1111-0000-0000-0000-000000000001'
-                     AND content_purged_at IS NOT NULL) = 1
-            THEN 'ok  content redacted, row and references intact'
-            ELSE 'FAIL retention removed the row' END;
 
 ROLLBACK;

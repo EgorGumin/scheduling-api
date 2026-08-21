@@ -146,9 +146,6 @@ export const comments = pgTable(
     /** Inbox ordering: assigned at insert, immune to platform clocks. */
     ingestSeq: bigserial({ mode: "bigint" }).notNull(),
     lastSyncedAt: tstz("last_synced_at").notNull(),
-    purgeAfter: tstz("purge_after").notNull(),
-    /** Content redacted, row kept: references and audit survive. */
-    contentPurgedAt: tstz("content_purged_at"),
   },
   (t) => [
     unique().on(t.ingestSeq),
@@ -172,7 +169,6 @@ export const comments = pgTable(
     index().on(t.tenantId, t.ingestSeq),
     index().on(t.channelId, t.ingestSeq),
     index().on(t.postId, t.createdAtRemote.desc(), t.id),
-    index().on(t.purgeAfter).where(sql`content_purged_at IS NULL`),
     // Cheaper than an enum type and edited by an ordinary migration, which is
     // what the vocabularies here need as platforms are added.
     check("comment_lifecycle", sql`${t.lifecycle} IN ('active', 'hidden', 'deleted', 'unknown')`),
