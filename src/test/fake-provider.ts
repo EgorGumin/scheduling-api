@@ -35,6 +35,9 @@ export interface FakeScript {
   readonly failures?: Record<string, PlatformError>;
   /** When set, the thread is answered in pages of this size. */
   readonly pageSize?: number;
+  /** Fails the first N reply attempts, then succeeds. */
+  readonly failReplies?: number;
+  readonly replyError?: PlatformError;
 }
 
 /**
@@ -45,6 +48,7 @@ export class FakeProvider implements CommentProvider {
   readonly platform: Platform;
   readonly manifest: PlatformManifest;
 
+  replyAttempts = 0;
   listCalls = 0;
   readonly posted: ReplyCommand[] = [];
 
@@ -96,8 +100,12 @@ export class FakeProvider implements CommentProvider {
   }
 
   async postReply(ctx: ChannelContext, cmd: ReplyCommand): Promise<PostedReply> {
+    this.replyAttempts += 1;
     if (ctx.credentialRef === null) {
       throw new PlatformError("unauthorized", "no credential", false);
+    }
+    if (this.replyAttempts <= (this.script.failReplies ?? 0)) {
+      throw this.script.replyError ?? new PlatformError("unavailable", "flaky", true);
     }
     this.posted.push(cmd);
     return { externalId: `ext-reply-${this.posted.length}`, postedAt: new Date() };

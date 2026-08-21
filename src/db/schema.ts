@@ -56,7 +56,7 @@ export const channels = pgTable(
     subjectHandle: text(),
     /** NULL means read-only: the channel is watched without credentials. */
     credentialId: uuid(),
-    /** active | degraded | disconnected */
+    /** active | degraded | disconnected. `disconnected` is written by whoever owns the account. */
     status: text().notNull().default("active"),
     degradedAt: tstz("degraded_at"),
     /** Nothing is captured before this point; historical import is out of scope. */

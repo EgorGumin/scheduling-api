@@ -19,6 +19,9 @@ const TABLES = [
 /** RESTART IDENTITY resets ingest_seq, so cursor assertions stay deterministic. */
 export async function resetDatabase(db: Database): Promise<void> {
   await db.execute(sql.raw(`TRUNCATE ${TABLES.join(", ")} RESTART IDENTITY CASCADE`));
+  // Queued jobs outlive our tables otherwise, and every test would count the
+  // leftovers of the ones before it.
+  await db.execute(sql`TRUNCATE graphile_worker._private_jobs CASCADE`);
 }
 
 export interface SeededChannel {
