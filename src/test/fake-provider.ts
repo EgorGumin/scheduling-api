@@ -57,7 +57,10 @@ export class FakeProvider implements CommentProvider {
     const items = this.script.threads?.[key] ?? [];
     const since = query.since;
     return {
-      items: since === undefined ? items : items.filter((c) => c.createdAtRemote >= since),
+      items:
+        since === undefined
+          ? items
+          : items.filter((c) => (c.remoteVersion ?? c.createdAtRemote) >= since),
       cursor: null,
     };
   }

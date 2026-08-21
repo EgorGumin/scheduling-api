@@ -57,6 +57,12 @@ export interface ChannelContext {
 
 export interface ListQuery {
   readonly postExternalId?: string;
+  /**
+   * Objects the platform indexed at or after this instant, compared against
+   * `remoteVersion`. Creation time is written by whoever posted the comment and
+   * can sit anywhere; index time is the platform's own and is what a reader can
+   * resume from.
+   */
   readonly since?: Date;
   readonly cursor?: string;
   readonly limit?: number;

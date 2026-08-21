@@ -59,7 +59,7 @@ export class BlueskyProvider implements CommentProvider {
       items:
         since === undefined
           ? items
-          : items.filter((comment) => comment.createdAtRemote >= since),
+          : items.filter((comment) => (comment.remoteVersion ?? comment.createdAtRemote) >= since),
       cursor: null,
       post: toRawPost(thread, postExternalId),
     };

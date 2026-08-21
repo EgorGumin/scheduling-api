@@ -62,6 +62,23 @@ describe("bluesky adapter", () => {
     expect(none.items).toHaveLength(0);
   });
 
+  it("filters on the platform's index time, not on the timestamp its author wrote", async () => {
+    // This reply was written by a client whose clock ran ahead: the platform
+    // indexed it at 20:06:38.374, its own record claims 20:06:39.191.
+    const clockAhead = "at://did:plc:zyjbzxt6eqzmbfqrgyvuaqfx/app.bsky.feed.post/3msqvma6ays2j";
+    const cutoff = new Date("2026-08-10T20:06:39.000Z");
+    const provider = providerReturning(fixture);
+
+    const all = await provider.listComments(ctx, { postExternalId: ROOT_URI });
+    const written = all.items.find((comment) => comment.externalId === clockAhead);
+    expect(written?.createdAtRemote.getTime()).toBeGreaterThan(cutoff.getTime());
+
+    const page = await provider.listComments(ctx, { postExternalId: ROOT_URI, since: cutoff });
+
+    expect(page.items.map((comment) => comment.externalId)).not.toContain(clockAhead);
+    expect(page.items.length).toBeGreaterThan(0);
+  });
+
   it("keeps media as references the platform can serve", async () => {
     const page = await providerReturning(fixture).listComments(ctx, {
       postExternalId: ROOT_URI,
