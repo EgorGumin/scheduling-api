@@ -130,6 +130,17 @@ describe("GET /v1/comments", () => {
     expect(response.headers["content-type"]).toContain("application/problem+json");
   });
 
+  it("answers a body that is not JSON with 400", async () => {
+    const response = await app.inject({
+      method: "POST",
+      url: `/v1/comments/${encodeId("comment", channelId)}/replies`,
+      headers: { ...auth, "content-type": "application/json", "idempotency-key": "k1" },
+      payload: '{"body":"unterminated',
+    });
+    expect(response.statusCode).toBe(400);
+    expect(response.json<Problem>().title).toBe("invalid_request");
+  });
+
   it("refuses a comma list longer than a page can use", async () => {
     const ids = Array.from({ length: 51 }, () => encodeId("post", channelId)).join(",");
     const response = await app.inject({ url: `/v1/comments?postId=${ids}`, headers: auth });

@@ -75,6 +75,15 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
         }),
       );
     }
+    const refused = clientRefusal(error);
+    if (refused !== null) {
+      return sendProblem(
+        reply,
+        new ApiError("invalid_request", "the request could not be understood", {
+          issues: [{ path: "body", message: refused }],
+        }),
+      );
+    }
     request.log.error({ err: error }, "unhandled failure");
     return sendProblem(reply, new ApiError("internal", "unexpected failure"));
   });
@@ -199,6 +208,22 @@ function rejectionToError(result: { reason: RejectionReason; action?: Action }):
     case "action_unavailable":
       return unavailableToError(result.action);
   }
+}
+
+/**
+ * Fastify refuses a body it cannot parse, one over the size limit and a content
+ * type it has no parser for, each with a 4xx of its own and before any route
+ * runs. Without this, they reach the caller as `internal`.
+ */
+function clientRefusal(error: unknown): string | null {
+  if (!(error instanceof Error) || !("statusCode" in error)) {
+    return null;
+  }
+  const { statusCode } = error;
+  if (typeof statusCode !== "number" || statusCode < 400 || statusCode >= 500) {
+    return null;
+  }
+  return error.message;
 }
 
 function unavailableToError(action: Action | undefined): ApiError {
