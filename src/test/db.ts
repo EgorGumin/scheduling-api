@@ -1,4 +1,5 @@
 import { sql } from "drizzle-orm";
+import { v7 as uuidV7 } from "uuid";
 import type { Database } from "../db/client.js";
 import { fakeManifest } from "./fake-provider.js";
 
@@ -33,8 +34,7 @@ export async function seedChannel(
   db: Database,
   options: { withCredential?: boolean; grantedScopes?: readonly string[] | null } = {},
 ): Promise<SeededChannel> {
-  const tenant = await db.execute<{ id: string }>(sql`SELECT uuidv7() AS id`);
-  const tenantId = tenant[0]!.id;
+  const tenantId = uuidV7();
 
   const scopes =
     options.grantedScopes === undefined ? FAKE_SCOPES : options.grantedScopes;
