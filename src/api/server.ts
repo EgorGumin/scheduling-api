@@ -1,6 +1,7 @@
-import Fastify, { type FastifyInstance } from "fastify";
+import Fastify, { type FastifyInstance, type FastifyServerOptions } from "fastify";
 import { z } from "zod";
 import type { Database } from "../db/client.js";
+import { logLevel } from "../config.js";
 import {
   capabilityDeclarationSchema,
   declareCapabilities,
@@ -30,28 +31,36 @@ export interface ServerDeps {
   readonly db: Database;
   readonly manifests: Readonly<Record<string, PlatformManifest>>;
   readonly authenticate?: Authenticate;
-}
-
-/**
- * The last thing that happens to a response. A timestamp that came back from a
- * raw SQL projection as something else fails here, before a client receives a
- * field that matches nothing. A response that misses its schema is our bug, so
- * it answers 500.
- */
-function respond<T>(schema: z.ZodType<T>, value: NoInfer<T>): T {
-  const parsed = schema.safeParse(value);
-  if (parsed.success) {
-    return parsed.data;
-  }
-  console.error("response did not match its schema", z.treeifyError(parsed.error));
-  throw new ApiError("internal", "the response did not match its schema");
+  readonly logger?: FastifyServerOptions["logger"];
 }
 
 export function buildServer(deps: ServerDeps): FastifyInstance {
-  const app = Fastify({ logger: false });
+  const app = Fastify({ logger: deps.logger ?? { level: logLevel } });
   const tenantOf = deps.authenticate ?? trustBearerAsTenantId;
 
-  app.setErrorHandler((error, _request, reply) => {
+  /**
+   * A timestamp that a raw SQL projection returned as something else fails here,
+   * before a client gets a field that matches nothing. Missing the schema is our
+   * bug, so it answers 500.
+   */
+  function respond<T>(schema: z.ZodType<T>, value: NoInfer<T>): T {
+    const parsed = schema.safeParse(value);
+    if (parsed.success) {
+      return parsed.data;
+    }
+    app.log.error({ issues: z.treeifyError(parsed.error) }, "response did not match its schema");
+    throw new ApiError("internal", "the response did not match its schema");
+  }
+
+  async function statusOf(tenantId: string, replyId: string) {
+    const status = await replyStatus(deps.db, tenantId, replyId);
+    if (status === null) {
+      throw new ApiError("internal", "the reply was written and then could not be read back");
+    }
+    return respond(replyStatusSchema, status);
+  }
+
+  app.setErrorHandler((error, request, reply) => {
     if (error instanceof ApiError) {
       return sendProblem(reply, error);
     }
@@ -66,12 +75,12 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
         }),
       );
     }
-    console.error(error);
+    request.log.error({ err: error }, "unhandled failure");
     return sendProblem(reply, new ApiError("internal", "unexpected failure"));
   });
 
-  // Generated from the same schemas every response below is parsed against. No
-  // authentication: describing the shapes should not need a key.
+  // Generated from the same schemas every response below is parsed against, and
+  // the only route that takes no key.
   app.get("/v1/openapi.json", () => openapiDocument());
 
   app.get("/v1/comments", async (request) => {
@@ -143,12 +152,10 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
         throw new ApiError("not_found", "no such comment");
       case "rejected":
         throw rejectionToError(result);
-      // The row was written in the transaction that returned this outcome, so
-      // reading it back cannot come up empty.
       case "duplicate":
-        return reply.status(200).send(await statusOf(deps, tenantId, result.replyId));
+        return reply.status(200).send(await statusOf(tenantId, result.replyId));
       case "queued":
-        return reply.status(202).send(await statusOf(deps, tenantId, result.replyId));
+        return reply.status(202).send(await statusOf(tenantId, result.replyId));
     }
   });
 
@@ -177,14 +184,6 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
   });
 
   return app;
-}
-
-async function statusOf(deps: ServerDeps, tenantId: string, replyId: string) {
-  const status = await replyStatus(deps.db, tenantId, replyId);
-  if (status === null) {
-    throw new ApiError("internal", "the reply was written and then could not be read back");
-  }
-  return respond(replyStatusSchema, status);
 }
 
 function rejectionToError(result: { reason: RejectionReason; action?: Action }): ApiError {

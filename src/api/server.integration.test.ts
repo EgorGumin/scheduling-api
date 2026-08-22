@@ -12,7 +12,8 @@ import { buildServer } from "./server.js";
 
 const db: Database = createDatabase();
 const testManifests = { bluesky: fakeManifest };
-const app = buildServer({ db, manifests: testManifests });
+// `warn` keeps request logging out of the output and leaves failures visible.
+const app = buildServer({ db, manifests: testManifests, logger: { level: "warn" } });
 
 let tenantId: string;
 let channelId: string;
