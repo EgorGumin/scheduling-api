@@ -1,6 +1,6 @@
 import { run, type Task } from "graphile-worker";
 import { ne, sql } from "drizzle-orm";
-import { databaseUrl } from "./config.js";
+import { databaseUrl, sweepCron } from "./config.js";
 import { createDatabase, type Database } from "./db/client.js";
 import { channels } from "./db/schema.js";
 import { BlueskyProvider } from "./platform/bluesky/adapter.js";
@@ -11,9 +11,6 @@ import { deliverReply, type DeliverPayload } from "./domain/replies/deliver.js";
 
 /** Jobs running at once in this process, across all tasks. */
 const CONCURRENCY = 4;
-
-/** How often every channel is swept. The delay a comment can sit unseen starts here. */
-const SWEEP = "*/5 * * * *";
 
 function buildTasks(db: Database, providers: ProviderRegistry): Record<string, Task> {
   return {
@@ -60,8 +57,13 @@ async function startWorker(): Promise<void> {
     connectionString: databaseUrl,
     concurrency: CONCURRENCY,
     taskList: buildTasks(db, providers),
-    crontab: `${SWEEP} reconcile-due\n`,
+    crontab: `${sweepCron} reconcile-due\n`,
   });
+
+  // The crontab fires on the schedule and never at startup, so a worker brought
+  // up against a freshly seeded channel would sit idle until the next tick. The
+  // job key collapses this into a pass that is already waiting.
+  await runner.addJob("reconcile-due", {}, { jobKey: "reconcile-due" });
 
   await runner.promise;
 }
