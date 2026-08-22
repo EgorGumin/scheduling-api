@@ -57,6 +57,9 @@ export async function reconcileChannel(
 
   const checked: string[] = [];
 
+  // A position taken after the reads would skip whatever arrived during the pass.
+  const readFrom = await databaseNow(db);
+
   // Reads go five at a time because the round trip dominates; writes go one at a
   // time because linkOrphans touches the whole channel, and two projections at
   // once would block each other on the same rows.
@@ -93,7 +96,7 @@ export async function reconcileChannel(
 
   const everythingFailed = failures.length > 0 && checked.length === 0;
 
-  await markRead(db, checked);
+  await markRead(db, checked, readFrom);
   await recordPass(db, channelId, everythingFailed);
 
   return {
@@ -261,16 +264,21 @@ async function postsToCheck(
 /**
  * Only posts read to the end move. The minute of overlap covers the gap between our
  * clock and the platform's. The position lives on the post: a pass reads a budgeted
- * subset, so a channel-wide one would speak for posts it never opened.
+ * subset, so a channel-wide one would cover posts it never opened.
  */
-async function markRead(db: Database, postIds: readonly string[]): Promise<void> {
+async function markRead(db: Database, postIds: readonly string[], readFrom: Date): Promise<void> {
   if (postIds.length === 0) {
     return;
   }
   await db
     .update(posts)
-    .set({ commentsReadThrough: sql`now() - interval '1 minute'` })
+    .set({ commentsReadThrough: sql`${readFrom.toISOString()}::timestamptz - interval '1 minute'` })
     .where(inArray(posts.id, [...postIds]));
+}
+
+async function databaseNow(db: Database): Promise<Date> {
+  const rows = await db.execute<{ now: string }>(sql`SELECT now() AS now`);
+  return new Date(rows[0]!.now);
 }
 
 /**
