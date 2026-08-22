@@ -39,7 +39,11 @@ export async function projectComments(
     }
 
     const linked = await linkOrphans(tx, ctx.channelId);
-    await seedCommentStates(tx, ctx, raw.map((comment) => comment.externalId));
+    await seedCommentStates(
+      tx,
+      ctx,
+      raw.map((comment) => comment.externalId),
+    );
 
     return { seen: raw.length, inserted, updated, linked };
   });

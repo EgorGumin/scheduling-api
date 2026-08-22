@@ -16,10 +16,15 @@ function buildTasks(db: Database, providers: ProviderRegistry): Record<string, T
   return {
     "deliver-reply": async (payload, helpers) => {
       const { replyId } = payload as DeliverPayload;
-      await deliverReply(db, providers, { replyId }, {
-        attempt: helpers.job.attempts,
-        maxAttempts: helpers.job.max_attempts,
-      });
+      await deliverReply(
+        db,
+        providers,
+        { replyId },
+        {
+          attempt: helpers.job.attempts,
+          maxAttempts: helpers.job.max_attempts,
+        },
+      );
     },
 
     "reconcile-channel": async (payload) => {

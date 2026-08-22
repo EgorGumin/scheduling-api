@@ -101,12 +101,19 @@ describe("projector", () => {
   });
 
   it("takes a comment written by the account we speak as for our own", async () => {
-    const mine = makeComment({ externalId: "mine", author: { externalId: "did:plc:us", displayName: "Us", handle: "us" } });
+    const mine = makeComment({
+      externalId: "mine",
+      author: { externalId: "did:plc:us", displayName: "Us", handle: "us" },
+    });
     const theirs = makeComment({ externalId: "theirs" });
 
     await projectComments(db, { ...ctx, actingAs: "did:plc:us" }, postId, [mine, theirs]);
 
-    const stored = await rows<{ external_id: string; is_outbound: boolean; handling: string | null }>(
+    const stored = await rows<{
+      external_id: string;
+      is_outbound: boolean;
+      handling: string | null;
+    }>(
       sql`SELECT c.external_id, c.is_outbound, s.handling
             FROM comments c LEFT JOIN comment_states s ON s.comment_id = c.id
            ORDER BY c.external_id`,
@@ -181,19 +188,19 @@ describe("projector", () => {
     await projectComments(db, ctx, postId, [late]);
     await projectComments(db, ctx, postId, [stale]);
 
-    const [row] = await rows<{ body: string }>(sql`SELECT body FROM comments WHERE external_id = 'v1'`);
+    const [row] = await rows<{ body: string }>(
+      sql`SELECT body FROM comments WHERE external_id = 'v1'`,
+    );
     expect(row?.body).toBe("edited");
   });
 
   it("opens domain state for inbound comments only", async () => {
     await seedOutboundReply("ours-1", "key-1");
 
-    await projectComments(
-      db,
-      ctx,
-      postId,
-      [makeComment({ externalId: "ours-1" }), makeComment({ externalId: "theirs-1" })],
-    );
+    await projectComments(db, ctx, postId, [
+      makeComment({ externalId: "ours-1" }),
+      makeComment({ externalId: "theirs-1" }),
+    ]);
 
     const marked = await rows<{ external_id: string; is_outbound: boolean }>(
       sql`SELECT external_id, is_outbound FROM comments WHERE external_id IN ('ours-1','theirs-1')`,
@@ -228,17 +235,12 @@ describe("projector", () => {
   });
 
   it("stores media references as the platform gave them", async () => {
-    await projectComments(
-      db,
-      ctx,
-      postId,
-      [
-        makeComment({
-          externalId: "m1",
-          media: [{ type: "image", url: "https://cdn.example/a.jpg", altText: "a cat" }],
-        }),
-      ],
-    );
+    await projectComments(db, ctx, postId, [
+      makeComment({
+        externalId: "m1",
+        media: [{ type: "image", url: "https://cdn.example/a.jpg", altText: "a cat" }],
+      }),
+    ]);
 
     const [row] = await rows<{ media: { type: string; url: string; altText?: string }[] }>(
       sql`SELECT media FROM comments WHERE external_id = 'm1'`,

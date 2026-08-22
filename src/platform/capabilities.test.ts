@@ -54,7 +54,6 @@ describe("channel declaration", () => {
     };
     expect(declareCapabilities(manifest).reply).toEqual({ supported: false });
   });
-
 });
 
 describe("object availability", () => {

@@ -36,8 +36,7 @@ export async function seedChannel(
 ): Promise<SeededChannel> {
   const tenantId = uuidV7();
 
-  const scopes =
-    options.grantedScopes === undefined ? FAKE_SCOPES : options.grantedScopes;
+  const scopes = options.grantedScopes === undefined ? FAKE_SCOPES : options.grantedScopes;
   const scopesJson = scopes === null ? null : JSON.stringify(scopes);
 
   let credentialId: string | null = null;

@@ -38,6 +38,10 @@ function prune(node: unknown): unknown {
 
 await mkdir("src/platform/bluesky/__fixtures__", { recursive: true });
 const path = `src/platform/bluesky/__fixtures__/${name}.json`;
-await writeFile(path, `${JSON.stringify({ thread: prune(response.data.thread) }, null, 2)}\n`, "utf8");
+await writeFile(
+  path,
+  `${JSON.stringify({ thread: prune(response.data.thread) }, null, 2)}\n`,
+  "utf8",
+);
 
 console.log(`captured ${path}`);

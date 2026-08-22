@@ -13,6 +13,9 @@
     "db:migrate": "tsx --env-file-if-exists=.env src/db/migrate.ts",
     "db:migrate:test": "tsx --env-file=.env.test src/db/migrate.ts",
     "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
     "test": "vitest run",
     "test:live": "vitest run --config vitest.live.config.ts",
     "test:integration": "vitest run --config vitest.integration.config.ts",
@@ -34,10 +37,15 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@types/node": "^22.15.3",
     "drizzle-kit": "^0.31.4",
+    "eslint": "^10.9.0",
+    "eslint-config-prettier": "^10.1.8",
+    "prettier": "^3.9.6",
     "tsx": "^4.20.3",
     "typescript": "^5.9.2",
+    "typescript-eslint": "^8.67.0",
     "vitest": "^3.2.4"
   }
 }

@@ -15,13 +15,9 @@ export type TextUnit = (typeof TEXT_UNITS)[number];
 export const textLimitsSchema = z.object({
   maxLength: z.int().positive(),
   counts: z.enum(TEXT_UNITS),
-  maxBytes: z
-    .int()
-    .positive()
-    .nullable()
-    .meta({
-      description: "A second, independent cap on the encoded size. Null where none is published.",
-    }),
+  maxBytes: z.int().positive().nullable().meta({
+    description: "A second, independent cap on the encoded size. Null where none is published.",
+  }),
 });
 export type TextLimits = z.infer<typeof textLimitsSchema>;
 
@@ -151,9 +147,7 @@ export function resolveAction(
     return { status: "available" };
   }
 
-  const deadline = new Date(
-    comment.createdAtRemote.getTime() + op.actionableForHours * 3_600_000,
-  );
+  const deadline = new Date(comment.createdAtRemote.getTime() + op.actionableForHours * 3_600_000);
   return deadline <= now
     ? { status: "expired" }
     : { status: "available", replyableUntil: deadline.toISOString() };

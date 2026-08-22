@@ -254,8 +254,7 @@ function toRawPost(node: AppBskyFeedDefs.ThreadViewPost, externalPostId: string)
   return {
     externalPostId,
     preview: record?.text ?? null,
-    permalink:
-      rkey === undefined ? null : `https://bsky.app/profile/${handle}/post/${rkey}`,
+    permalink: rkey === undefined ? null : `https://bsky.app/profile/${handle}/post/${rkey}`,
     publishedAt: Number.isNaN(publishedAt.getTime()) ? null : publishedAt,
   };
 }

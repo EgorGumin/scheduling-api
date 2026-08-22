@@ -5,7 +5,13 @@ import { ProviderRegistry } from "../../platform/port.js";
 import { PlatformError } from "../../platform/types.js";
 import { deliverReply } from "./deliver.js";
 import { enqueueReply, MAX_DELIVERY_ATTEMPTS } from "./enqueue.js";
-import { replyRequest, replyRow, seedReplyFixture, testManifests, type Fixture } from "./fixture.js";
+import {
+  replyRequest,
+  replyRow,
+  seedReplyFixture,
+  testManifests,
+  type Fixture,
+} from "./fixture.js";
 
 const db: Database = createDatabase();
 let fixture: Fixture;
@@ -85,7 +91,9 @@ describe("delivery", () => {
     });
     const replyId = await queueReply();
 
-    await expect(deliverReply(db, fixture.providers, { replyId }, attempt)).resolves.toBeUndefined();
+    await expect(
+      deliverReply(db, fixture.providers, { replyId }, attempt),
+    ).resolves.toBeUndefined();
     expect(await replyRow(db, replyId)).toMatchObject({
       status: "failed",
       error_code: "permission_denied",

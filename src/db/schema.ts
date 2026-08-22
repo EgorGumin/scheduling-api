@@ -15,7 +15,10 @@ import {
 } from "drizzle-orm/pg-core";
 
 const tstz = (name: string) => timestamp(name, { withTimezone: true });
-const newId = () => uuid().primaryKey().default(sql`uuidv7()`);
+const newId = () =>
+  uuid()
+    .primaryKey()
+    .default(sql`uuidv7()`);
 
 /**
  * Owned by the account-connection module, not by this one. Present here so the
@@ -45,7 +48,10 @@ export const platformCredentials = pgTable(
     unique().on(t.tenantId, t.id),
     // Platform is in the key so a channel cannot borrow another platform's account
     unique().on(t.tenantId, t.platform, t.id),
-    check("credential_state", sql`${t.state} IN ('ok', 'expired', 'insufficient_scope', 'revoked')`),
+    check(
+      "credential_state",
+      sql`${t.state} IN ('ok', 'expired', 'insufficient_scope', 'revoked')`,
+    ),
   ],
 );
 
@@ -110,7 +116,9 @@ export const posts = pgTable(
       columns: [t.tenantId, t.channelId],
       foreignColumns: [channels.tenantId, channels.id],
     }),
-    index().on(t.publisherPostId).where(sql`publisher_post_id IS NOT NULL`),
+    index()
+      .on(t.publisherPostId)
+      .where(sql`publisher_post_id IS NOT NULL`),
   ],
 );
 

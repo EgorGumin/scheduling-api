@@ -4,7 +4,10 @@ import { createDatabase, type Database } from "../db/client.js";
 import { projectComments } from "../domain/ingest/projector.js";
 import { fakeManifest, makeComment } from "../test/fake-provider.js";
 import { resetDatabase, seedChannel, seedPost } from "../test/db.js";
+import type { CapabilityDeclaration } from "../platform/capabilities.js";
+import type { TriageState } from "../domain/triage.js";
 import { encodeId } from "./ids.js";
+import type { CommentPage, CommentView, Problem, ReplyStatus } from "./schemas.js";
 import { buildServer } from "./server.js";
 
 const db: Database = createDatabase();
@@ -71,7 +74,7 @@ describe("GET /v1/comments", () => {
     const response = await app.inject({ method: "GET", url: "/v1/comments", headers: auth });
     expect(response.statusCode).toBe(200);
 
-    const body = response.json();
+    const body = response.json<CommentPage>();
     expect(body.data).toHaveLength(3);
     for (const comment of body.data) {
       expect(comment.id).toMatch(/^cmt_/);
@@ -82,15 +85,16 @@ describe("GET /v1/comments", () => {
 
   it("pages by cursor without repeating or dropping a row", async () => {
     const first = await app.inject({ url: "/v1/comments?limit=2", headers: auth });
-    const firstBody = first.json();
+    const firstBody = first.json<CommentPage>();
     expect(firstBody.data).toHaveLength(2);
-    expect(firstBody.page.nextCursor).toBeTruthy();
+    const cursor = firstBody.page.nextCursor;
+    expect(cursor).toBeTruthy();
 
     const second = await app.inject({
-      url: `/v1/comments?limit=2&cursor=${encodeURIComponent(firstBody.page.nextCursor)}`,
+      url: `/v1/comments?limit=2&cursor=${encodeURIComponent(cursor!)}`,
       headers: auth,
     });
-    const secondBody = second.json();
+    const secondBody = second.json<CommentPage>();
 
     const ids = [...firstBody.data, ...secondBody.data].map((c: { id: string }) => c.id);
     expect(new Set(ids).size).toBe(3);
@@ -100,23 +104,23 @@ describe("GET /v1/comments", () => {
   it("side-loads each post once, not once per comment", async () => {
     await db.execute(sql`UPDATE posts SET preview = 'the original post'`);
 
-    const body = (await app.inject({ url: "/v1/comments", headers: auth })).json();
+    const body = (await app.inject({ url: "/v1/comments", headers: auth })).json<CommentPage>();
 
     expect(body.data).toHaveLength(3);
     expect(body.included.posts).toHaveLength(1);
     expect(body.included.posts[0]).toMatchObject({ preview: "the original post" });
-    expect(body.included.posts[0].id).toBe(body.data[0].postId);
+    expect(body.included.posts[0]?.id).toBe(body.data[0]?.postId);
   });
 
   it("offers no triage state on a reply of ours", async () => {
     // Regression: the inbox handed out `handling: "new"` on comments we sent.
     await db.execute(sql`UPDATE comments SET is_outbound = true WHERE external_id = 'a'`);
 
-    const body = (await app.inject({ url: "/v1/comments", headers: auth })).json();
-    const ours = body.data.find((c: { direction: string }) => c.direction === "outbound");
+    const body = (await app.inject({ url: "/v1/comments", headers: auth })).json<CommentPage>();
+    const ours = body.data.find((c) => c.direction === "outbound");
 
     expect(ours).toBeDefined();
-    expect(ours.state).toBeNull();
+    expect(ours?.state).toBeNull();
   });
 
   it("rejects an unknown query parameter instead of ignoring it", async () => {
@@ -146,7 +150,7 @@ describe("GET /v1/comments", () => {
       url: "/v1/comments",
       headers: { authorization: `Bearer ${other.tenantId}` },
     });
-    expect(response.json().data).toHaveLength(0);
+    expect(response.json<CommentPage>().data).toHaveLength(0);
   });
 });
 
@@ -157,7 +161,7 @@ describe("GET /v1/comments/{commentId}", () => {
     const response = await app.inject({ url: `/v1/comments/${id}`, headers: auth });
 
     expect(response.statusCode).toBe(200);
-    expect(response.json()).toMatchObject({ id, depth: 1, direction: "inbound" });
+    expect(response.json<CommentView>()).toMatchObject({ id, depth: 1, direction: "inbound" });
   });
 
   it("reports another tenant's comment as missing", async () => {
@@ -185,7 +189,10 @@ describe("capabilities and actions", () => {
       headers: auth,
     });
     expect(response.statusCode).toBe(200);
-    expect(response.json().reply).toMatchObject({ supported: true, text: { maxLength: 100 } });
+    expect(response.json<CapabilityDeclaration>().reply).toMatchObject({
+      supported: true,
+      text: { maxLength: 100 },
+    });
   });
 
   it("says supported on the channel and unauthorized on the object at once", async () => {
@@ -197,8 +204,8 @@ describe("capabilities and actions", () => {
     });
     const inbox = await app.inject({ url: "/v1/comments", headers: auth });
 
-    expect(declaration.json().reply.supported).toBe(true);
-    expect(inbox.json().data[0].actions.reply).toEqual({ status: "unauthorized" });
+    expect(declaration.json<CapabilityDeclaration>().reply.supported).toBe(true);
+    expect(inbox.json<CommentPage>().data[0]?.actions.reply).toEqual({ status: "unauthorized" });
   });
 
   it("hides another tenant's channel behind a 404", async () => {
@@ -221,8 +228,8 @@ describe("replies", () => {
     });
 
     expect(response.statusCode).toBe(202);
-    expect(response.json()).toMatchObject({ status: "queued" });
-    expect(response.json().id).toMatch(/^rpl_/);
+    expect(response.json<ReplyStatus>()).toMatchObject({ status: "queued" });
+    expect(response.json<ReplyStatus>().id).toMatch(/^rpl_/);
   });
 
   it("reports a queued reply on its own route", async () => {
@@ -234,13 +241,13 @@ describe("replies", () => {
     });
 
     const response = await app.inject({
-      url: `/v1/replies/${accepted.json().id}`,
+      url: `/v1/replies/${accepted.json<ReplyStatus>().id}`,
       headers: auth,
     });
 
     expect(response.statusCode).toBe(200);
-    expect(response.json()).toMatchObject({
-      id: accepted.json().id,
+    expect(response.json<ReplyStatus>()).toMatchObject({
+      id: accepted.json<ReplyStatus>().id,
       status: "queued",
       externalId: null,
       postedAt: null,
@@ -258,7 +265,7 @@ describe("replies", () => {
 
     const other = await seedChannel(db);
     const response = await app.inject({
-      url: `/v1/replies/${accepted.json().id}`,
+      url: `/v1/replies/${accepted.json<ReplyStatus>().id}`,
       headers: { authorization: `Bearer ${other.tenantId}` },
     });
     expect(response.statusCode).toBe(404);
@@ -278,7 +285,7 @@ describe("replies", () => {
     const second = await send();
 
     expect(second.statusCode).toBe(200);
-    expect(second.json().id).toBe(first.json().id);
+    expect(second.json<ReplyStatus>().id).toBe(first.json<ReplyStatus>().id);
   });
 
   it("refuses a key reused for different content", async () => {
@@ -296,7 +303,7 @@ describe("replies", () => {
       payload: { body: "second" },
     });
     expect(conflict.statusCode).toBe(409);
-    expect(conflict.json().title).toBe("idempotency_conflict");
+    expect(conflict.json<Problem>().title).toBe("idempotency_conflict");
   });
 
   it("insists on an idempotency key", async () => {
@@ -328,7 +335,7 @@ describe("replies", () => {
       payload: { body: "cannot" },
     });
     expect(response.statusCode).toBe(409);
-    expect(response.json().title).toBe("channel_unauthorized");
+    expect(response.json<Problem>().title).toBe("channel_unauthorized");
   });
 });
 
@@ -339,8 +346,8 @@ describe("filters", () => {
     const outbound = await app.inject({ url: "/v1/comments?direction=outbound", headers: auth });
     const inbound = await app.inject({ url: "/v1/comments?direction=inbound", headers: auth });
 
-    expect(outbound.json().data).toHaveLength(1);
-    expect(inbound.json().data).toHaveLength(2);
+    expect(outbound.json<CommentPage>().data).toHaveLength(1);
+    expect(inbound.json<CommentPage>().data).toHaveLength(2);
   });
 
   it("finds comments by the publishing module's own post identifier", async () => {
@@ -355,8 +362,8 @@ describe("filters", () => {
       headers: auth,
     });
 
-    expect(matched.json().data.length).toBeGreaterThan(0);
-    expect(missed.json().data).toEqual([]);
+    expect(matched.json<CommentPage>().data.length).toBeGreaterThan(0);
+    expect(missed.json<CommentPage>().data).toEqual([]);
   });
 });
 
@@ -370,7 +377,7 @@ describe("domain state", () => {
     });
 
     expect(response.statusCode).toBe(200);
-    expect(response.json()).toMatchObject({
+    expect(response.json<TriageState>()).toMatchObject({
       handling: "escalated",
       handledBy: "human-3",
       note: "pricing question",
@@ -393,7 +400,11 @@ describe("domain state", () => {
       payload: { handling: "new" },
     });
 
-    expect(response.json()).toMatchObject({ handling: "new", handledAt: null, handledBy: null });
+    expect(response.json<TriageState>()).toMatchObject({
+      handling: "new",
+      handledAt: null,
+      handledBy: null,
+    });
   });
 
   it("refuses to triage a reply of ours", async () => {
@@ -420,4 +431,3 @@ describe("domain state", () => {
     expect(response.statusCode).toBe(400);
   });
 });
-

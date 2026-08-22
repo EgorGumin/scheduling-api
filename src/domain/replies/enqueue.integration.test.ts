@@ -4,7 +4,13 @@ import { createDatabase, type Database } from "../../db/client.js";
 import { fakeManifest } from "../../test/fake-provider.js";
 import { seedChannel } from "../../test/db.js";
 import { enqueueReply } from "./enqueue.js";
-import { jobCount, replyRequest, seedReplyFixture, testManifests, type Fixture } from "./fixture.js";
+import {
+  jobCount,
+  replyRequest,
+  seedReplyFixture,
+  testManifests,
+  type Fixture,
+} from "./fixture.js";
 
 const db: Database = createDatabase();
 let fixture: Fixture;
@@ -60,7 +66,11 @@ describe("enqueue", () => {
 
     // Three graphemes against a limit of a hundred, twelve bytes against eight:
     // only the platform's own unit says whether this fits.
-    const result = await enqueueReply(db, { bluesky: capped }, replyRequest(fixture, { body: "👍👍👍" }));
+    const result = await enqueueReply(
+      db,
+      { bluesky: capped },
+      replyRequest(fixture, { body: "👍👍👍" }),
+    );
 
     expect(result).toMatchObject({ outcome: "rejected", reason: "body_too_long" });
   });
@@ -103,7 +113,10 @@ describe("enqueue", () => {
 
     const result = await queue();
 
-    expect(result).toMatchObject({ outcome: "rejected", action: { status: "forbidden_by_author" } });
+    expect(result).toMatchObject({
+      outcome: "rejected",
+      action: { status: "forbidden_by_author" },
+    });
     expect(await jobCount(db)).toBe(0);
   });
 

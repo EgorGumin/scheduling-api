@@ -1,9 +1,19 @@
 import { and, eq, inArray, sql } from "drizzle-orm";
 import type { Database } from "../../db/client.js";
-import { channels, commentStates, comments, outboundReplies, platformCredentials } from "../../db/schema.js";
+import {
+  channels,
+  commentStates,
+  comments,
+  outboundReplies,
+  platformCredentials,
+} from "../../db/schema.js";
 import type { ProviderRegistry } from "../../platform/port.js";
 import type { CredentialState } from "../../platform/capabilities.js";
-import { PlatformError, type ChannelContext, type PlatformErrorCode } from "../../platform/types.js";
+import {
+  PlatformError,
+  type ChannelContext,
+  type PlatformErrorCode,
+} from "../../platform/types.js";
 
 /**
  * A refusal about the account concerns every comment on the channel. Left at `ok`,
@@ -89,7 +99,11 @@ export async function deliverReply(
     });
   } catch (error) {
     await recordFailure(db, reply, error, attempt);
-    if (error instanceof PlatformError && error.retryable && attempt.attempt < attempt.maxAttempts) {
+    if (
+      error instanceof PlatformError &&
+      error.retryable &&
+      attempt.attempt < attempt.maxAttempts
+    ) {
       throw error;
     }
     return;

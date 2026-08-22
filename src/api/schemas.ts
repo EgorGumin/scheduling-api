@@ -18,8 +18,7 @@ const publish = <T extends z.ZodType>(id: string, schema: T): T => {
   return schema;
 };
 
-const identifier = (kind: IdKind, id: string) =>
-  publish(id, z.string().regex(idPattern(kind)));
+const identifier = (kind: IdKind, id: string) => publish(id, z.string().regex(idPattern(kind)));
 
 const channelId = identifier("channel", "ChannelId");
 const postId = identifier("post", "PostId");
@@ -101,6 +100,7 @@ export const commentPageSchema = publish(
     }),
   }),
 );
+export type CommentPage = z.infer<typeof commentPageSchema>;
 
 /** Mirrors the check constraint on `outbound_replies.status`. */
 export const REPLY_STATUSES = [

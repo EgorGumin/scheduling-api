@@ -57,16 +57,13 @@ const SESSION = {
  * be a function, which is how a test makes the platform behave differently the
  * second time.
  */
-function writingProvider(
-  answers: Record<string, unknown | ((call: number) => Response)>,
-  calls: Call[] = [],
-): BlueskyProvider {
+function writingProvider(answers: Record<string, unknown>, calls: Call[] = []): BlueskyProvider {
   const counts = new Map<string, number>();
   // Reads arrive as a URL, writes as a Request: the session builds one before it
   // signs the call.
-  const fetchImpl = (async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+  const fetchImpl = async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
     const request = input instanceof Request ? input : null;
-    const url = new URL(request === null ? String(input) : request.url);
+    const url = new URL(input instanceof Request ? input.url : input);
     const method = url.pathname.replace("/xrpc/", "");
     const sent = request === null ? init?.body : await request.text();
     const seen = (counts.get(method) ?? 0) + 1;
@@ -84,7 +81,7 @@ function writingProvider(
     return typeof answer === "function"
       ? (answer as (call: number) => Response)(seen)
       : json(answer);
-  }) as unknown as typeof fetch;
+  };
 
   return new BlueskyProvider({ fetchImpl, pds: { serviceUrl: ENTRYWAY, fetchImpl } });
 }
@@ -197,9 +194,7 @@ describe("bluesky adapter", () => {
       "an image, with its alt text",
       {
         $type: "app.bsky.embed.images#view",
-        images: [
-          { thumb: THUMB, fullsize: FULL, alt: "a guitar" },
-        ],
+        images: [{ thumb: THUMB, fullsize: FULL, alt: "a guitar" }],
       },
       [{ type: "image", url: FULL, altText: "a guitar" }],
     ],
@@ -207,9 +202,7 @@ describe("bluesky adapter", () => {
       "an image whose alt text the author left empty",
       {
         $type: "app.bsky.embed.images#view",
-        images: [
-          { thumb: THUMB, fullsize: FULL, alt: "" },
-        ],
+        images: [{ thumb: THUMB, fullsize: FULL, alt: "" }],
       },
       [{ type: "image", url: FULL }],
     ],
@@ -236,9 +229,7 @@ describe("bluesky adapter", () => {
         },
         media: {
           $type: "app.bsky.embed.images#view",
-          images: [
-          { thumb: THUMB, fullsize: FULL, alt: "" },
-        ],
+          images: [{ thumb: THUMB, fullsize: FULL, alt: "" }],
         },
       },
       [{ type: "image", url: FULL }],
@@ -264,9 +255,7 @@ describe("bluesky adapter", () => {
   });
 
   it("refuses to list channel-wide, which this platform cannot do", async () => {
-    await expect(providerReturning(fixture).listComments(ctx, {})).rejects.toThrow(
-      PlatformError,
-    );
+    await expect(providerReturning(fixture).listComments(ctx, {})).rejects.toThrow(PlatformError);
   });
 
   it("rejects an identifier that is not an AT-URI before making a call", async () => {
@@ -278,9 +267,9 @@ describe("bluesky adapter", () => {
       },
     });
 
-    await expect(
-      provider.listComments(ctx, { postExternalId: "12345" }),
-    ).rejects.toMatchObject({ code: "constraint_violated" });
+    await expect(provider.listComments(ctx, { postExternalId: "12345" })).rejects.toMatchObject({
+      code: "constraint_violated",
+    });
     expect(called).toBe(false);
   });
 
@@ -292,16 +281,18 @@ describe("bluesky adapter", () => {
 
   it("marks a rate limit retryable", async () => {
     const limited = providerReturning({}, 429);
-    await expect(
-      limited.listComments(ctx, { postExternalId: ROOT_URI }),
-    ).rejects.toMatchObject({ code: "rate_limited", retryable: true });
+    await expect(limited.listComments(ctx, { postExternalId: ROOT_URI })).rejects.toMatchObject({
+      code: "rate_limited",
+      retryable: true,
+    });
   });
 
   it("marks a bad request permanent", async () => {
     const rejected = providerReturning({ error: "InvalidRequest" }, 400);
-    await expect(
-      rejected.listComments(ctx, { postExternalId: ROOT_URI }),
-    ).rejects.toMatchObject({ code: "constraint_violated", retryable: false });
+    await expect(rejected.listComments(ctx, { postExternalId: ROOT_URI })).rejects.toMatchObject({
+      code: "constraint_violated",
+      retryable: false,
+    });
   });
 
   it("refuses to reply through a read-only channel", async () => {
@@ -342,6 +333,7 @@ describe("bluesky adapter", () => {
         record: {
           $type: "app.bsky.feed.post",
           text: "on it",
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- the matcher is typed as `any`
           createdAt: expect.any(String),
           reply: {
             parent: { uri: ROOT_URI, cid: ROOT_CID },
@@ -463,8 +455,7 @@ describe("bluesky adapter", () => {
     const provider = writingProvider(
       {
         "app.bsky.feed.getPostThread": fixture,
-        "com.atproto.server.createSession": () =>
-          json({ error: "AuthenticationRequired" }, 401),
+        "com.atproto.server.createSession": () => json({ error: "AuthenticationRequired" }, 401),
       },
       calls,
     );

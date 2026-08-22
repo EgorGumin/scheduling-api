@@ -2,7 +2,12 @@ import { eq, inArray, sql } from "drizzle-orm";
 import type { Database } from "../../db/client.js";
 import { channels, platformCredentials, posts } from "../../db/schema.js";
 import type { CommentProvider } from "../../platform/port.js";
-import { PlatformError, type ChannelContext, type RawComment, type RawPost } from "../../platform/types.js";
+import {
+  PlatformError,
+  type ChannelContext,
+  type RawComment,
+  type RawPost,
+} from "../../platform/types.js";
 import { projectComments, type ProjectionResult } from "./projector.js";
 
 /** Consecutive failures after which the channel is reported as degraded. */
@@ -249,8 +254,7 @@ async function postsToCheck(
   return rows.map((row) => ({
     id: row.id,
     externalPostId: row.external_post_id,
-    readThrough:
-      row.comments_read_through === null ? null : new Date(row.comments_read_through),
+    readThrough: row.comments_read_through === null ? null : new Date(row.comments_read_through),
   }));
 }
 

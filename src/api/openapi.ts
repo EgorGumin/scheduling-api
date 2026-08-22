@@ -171,10 +171,7 @@ function paths(): Json {
               409,
               "The state refuses the reply: the key was used for a different body, the account is not connected or lacks a permission, or the platform's window has closed.",
             ],
-            [
-              422,
-              "The body is empty, too long for the platform, or nested deeper than it allows.",
-            ],
+            [422, "The body is empty, too long for the platform, or nested deeper than it allows."],
           ),
         },
       },

@@ -72,7 +72,7 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
 
   // Generated from the same schemas every response below is parsed against. No
   // authentication: describing the shapes should not need a key.
-  app.get("/v1/openapi.json", async () => openapiDocument());
+  app.get("/v1/openapi.json", () => openapiDocument());
 
   app.get("/v1/comments", async (request) => {
     const tenantId = tenantOf(request);

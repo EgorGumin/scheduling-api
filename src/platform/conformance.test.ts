@@ -34,9 +34,9 @@ function connectedTo(platform: ChannelContext["platform"], actor: string): Chann
  * suite check that one reply sent twice stays one record.
  */
 function blueskyStub(): typeof fetch {
-  return (async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+  return async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
     const request = input instanceof Request ? input : null;
-    const url = new URL(request === null ? String(input) : request.url);
+    const url = new URL(input instanceof Request ? input.url : input);
     const method = url.pathname.replace("/xrpc/", "");
     const json = (body: unknown, status = 200) =>
       new Response(JSON.stringify(body), {
@@ -54,7 +54,7 @@ function blueskyStub(): typeof fetch {
       });
     }
     if (method === "com.atproto.repo.putRecord") {
-      const body = request === null ? String(init?.body) : await request.text();
+      const body = request === null ? ((init?.body as string) ?? "") : await request.text();
       const { rkey } = JSON.parse(body) as { rkey: string };
       return json({
         uri: `at://${BLUESKY_ACTOR}/app.bsky.feed.post/${rkey}`,
@@ -64,7 +64,7 @@ function blueskyStub(): typeof fetch {
     return url.searchParams.get("uri") === BLUESKY_POST
       ? json(fixture)
       : json({ error: "NotFound" }, 400);
-  }) as unknown as typeof fetch;
+  };
 }
 
 describe("port conformance", () => {

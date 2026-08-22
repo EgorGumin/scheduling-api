@@ -17,19 +17,22 @@ export function toPlatformError(error: unknown, what: string): PlatformError {
     return new PlatformError("unavailable", `bluesky ${what} failed`, true, error);
   }
 
+  // The SDK types this as its own enum, and every value below is an HTTP status.
+  const status: number = error.status;
+
   // Status 1 is the SDK's own marker for a request that never got an answer;
   // status 2 means the answer did not match the lexicon.
-  if (error.status === 1) {
+  if (status === 1) {
     return new PlatformError("unavailable", `bluesky ${what} unreachable`, true, error);
   }
-  if (error.status === 2) {
+  if (status === 2) {
     return new PlatformError("unknown", `bluesky ${what} answered off-schema`, false, error);
   }
 
   return new PlatformError(
-    codeForStatus(error.status, error.error),
-    `bluesky ${what} failed with ${error.status}`,
-    error.status === 429 || error.status >= 500,
+    codeForStatus(status, error.error),
+    `bluesky ${what} failed with ${status}`,
+    status === 429 || status >= 500,
     error.message,
   );
 }

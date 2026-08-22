@@ -258,7 +258,10 @@ describe("reconcile", () => {
       permalink: "https://example.test/post-a",
       publishedAt: new Date("2026-08-20T10:00:00Z"),
     };
-    const provider = new FakeProvider({ threads: { "post-a": [] }, posts: { "post-a": described } });
+    const provider = new FakeProvider({
+      threads: { "post-a": [] },
+      posts: { "post-a": described },
+    });
     await reconcileChannel(db, provider, channelId);
 
     // An unauthenticated read, or one from an endpoint that answers with less.

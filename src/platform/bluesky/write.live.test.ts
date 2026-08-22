@@ -42,10 +42,7 @@ describe.skipIf(!configured)("bluesky writes, live", () => {
     const thread = await provider.listComments(ctx, { postExternalId: fixturePost! });
 
     const target = thread.items.find((comment) => comment.author?.externalId !== did);
-    expect(
-      target,
-      `${fixturePost} has no comment from another account to answer`,
-    ).toBeDefined();
+    expect(target, `${fixturePost} has no comment from another account to answer`).toBeDefined();
 
     const replyId = uuidV7();
     const command = {

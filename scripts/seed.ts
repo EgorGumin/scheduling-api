@@ -36,7 +36,9 @@ const replyingAs = password === undefined ? undefined : account;
 const db = createDatabase();
 
 const appView = openAppView();
-const { data: { did } } = await appView.com.atproto.identity.resolveHandle({ handle });
+const {
+  data: { did },
+} = await appView.com.atproto.identity.resolveHandle({ handle });
 
 const tenantId = uuidV7();
 

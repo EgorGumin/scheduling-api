@@ -28,11 +28,7 @@ export type EnqueueResult =
   | { readonly outcome: "unknown_comment" };
 
 export type RejectionReason =
-  | "action_unavailable"
-  | "body_too_long"
-  | "body_empty"
-  | "depth_exceeded"
-  | "idempotency_conflict";
+  "action_unavailable" | "body_too_long" | "body_empty" | "depth_exceeded" | "idempotency_conflict";
 
 type CommentRow = {
   id: string;
