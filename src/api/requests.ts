@@ -1,7 +1,7 @@
 import type { FastifyRequest } from "fastify";
 import { z } from "zod";
 import { HANDLING } from "../domain/triage.js";
-import type { Lifecycle } from "../platform/types.js";
+import { LIFECYCLE } from "../platform/types.js";
 import { ApiError } from "./errors.js";
 import { decodeId, type IdKind } from "./ids.js";
 
@@ -22,22 +22,21 @@ export const trustBearerAsTenantId: Authenticate = (request) => {
   return token;
 };
 
-const LIFECYCLE = ["active", "hidden", "deleted", "unknown"] as const satisfies
-  readonly Lifecycle[];
-
 /** Asking for a value twice changes nothing, so the vocabulary is also the limit. */
 const commaSeparated = <T extends string>(values: readonly [T, ...T[]]) =>
   z
     .string()
     .transform((value) => value.split(","))
-    .pipe(z.array(z.enum(values)).min(1).max(values.length));
+    .pipe(z.array(z.enum(values)).min(1).max(values.length))
+    .meta({ description: `Comma-separated, any of: ${values.join(", ")}.` });
 
 const MAX_IDS = 50;
 
 const commaSeparatedIds = z
   .string()
   .transform((value) => value.split(","))
-  .pipe(z.array(z.string()).min(1).max(MAX_IDS));
+  .pipe(z.array(z.string()).min(1).max(MAX_IDS))
+  .meta({ description: `Comma-separated, at most ${MAX_IDS}.` });
 
 export const listQuery = z
   .object({
@@ -49,7 +48,10 @@ export const listQuery = z
     lifecycle: commaSeparated(LIFECYCLE).optional(),
     direction: z.enum(["inbound", "outbound"]).optional(),
     limit: z.coerce.number().int().min(1).max(100).default(25),
-    cursor: z.string().optional(),
+    cursor: z
+      .string()
+      .meta({ description: "The `page.nextCursor` of a previous response." })
+      .optional(),
   })
   // A misspelled filter would otherwise be ignored, and the caller would read an
   // unfiltered page as a filtered one.

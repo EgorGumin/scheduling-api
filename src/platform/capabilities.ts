@@ -1,3 +1,4 @@
+import { z } from "zod";
 import type { Lifecycle, Platform } from "./types.js";
 
 export type ActionName = "reply";
@@ -8,36 +9,49 @@ export type ActionName = "reply";
  * is declared here rather than assumed by the caller, which is what keeps the
  * check platform-agnostic.
  */
-export type TextUnit = "graphemes" | "utf16";
+export const TEXT_UNITS = ["graphemes", "utf16"] as const;
+export type TextUnit = (typeof TEXT_UNITS)[number];
 
-export interface TextLimits {
-  readonly maxLength: number;
-  readonly counts: TextUnit;
-  /** A second, independent cap on the encoded size. `null` where none is published. */
-  readonly maxBytes: number | null;
-}
+export const textLimitsSchema = z.object({
+  maxLength: z.int().positive(),
+  counts: z.enum(TEXT_UNITS),
+  maxBytes: z
+    .int()
+    .positive()
+    .nullable()
+    .meta({
+      description: "A second, independent cap on the encoded size. Null where none is published.",
+    }),
+});
+export type TextLimits = z.infer<typeof textLimitsSchema>;
 
-export interface AttachmentLimits {
-  readonly maxCount: number;
-  readonly mimeTypes: readonly string[];
-  readonly maxBytes: number;
-}
+export const attachmentLimitsSchema = z.object({
+  maxCount: z.int().nonnegative(),
+  mimeTypes: z.array(z.string()),
+  maxBytes: z.int().nonnegative(),
+});
+export type AttachmentLimits = z.infer<typeof attachmentLimitsSchema>;
 
 /** What a client is told about an operation. */
-export type PublicOperation =
-  | { readonly supported: false }
-  | {
-      readonly supported: true;
-      readonly actionableForHours: number | null;
-      readonly text: TextLimits;
-      readonly attachments: AttachmentLimits;
-      /** Largest permitted `depth`, where a top-level comment is 0. */
-      readonly maxDepth: number | null;
-    };
+export const publicOperationSchema = z.discriminatedUnion("supported", [
+  z.object({ supported: z.literal(false) }),
+  z.object({
+    supported: z.literal(true),
+    actionableForHours: z.number().positive().nullable(),
+    text: textLimitsSchema,
+    attachments: attachmentLimitsSchema,
+    maxDepth: z
+      .int()
+      .nonnegative()
+      .nullable()
+      .meta({ description: "Largest permitted depth, where a top-level comment is 0." }),
+  }),
+]);
+export type PublicOperation = z.infer<typeof publicOperationSchema>;
 
 export type OperationManifest =
   | { readonly supported: false }
-  | (Extract<PublicOperation, { readonly supported: true }> & {
+  | (Extract<PublicOperation, { supported: true }> & {
       /** Never published: a missing permission is fixed on the credential, not here. */
       readonly requiredScopes: readonly string[];
     });
@@ -47,21 +61,24 @@ export interface PlatformManifest {
   readonly operations: Readonly<Record<ActionName, OperationManifest>>;
 }
 
-export interface CapabilityDeclaration {
-  readonly reply: PublicOperation;
-}
+export const capabilityDeclarationSchema = z.object({ reply: publicOperationSchema });
+export type CapabilityDeclaration = z.infer<typeof capabilityDeclarationSchema>;
 
-export type Action =
-  | { readonly status: "available"; readonly replyableUntil?: string }
-  | {
-      readonly status:
-        | "unsupported"
-        | "unauthorized"
-        | "insufficient_scope"
-        | "expired"
-        | "forbidden_by_author"
-        | "gone";
-    };
+/** Why the operation cannot be carried out. Named so the client knows what to fix. */
+export const ACTION_BLOCKERS = [
+  "unsupported",
+  "unauthorized",
+  "insufficient_scope",
+  "expired",
+  "forbidden_by_author",
+  "gone",
+] as const;
+
+export const actionSchema = z.discriminatedUnion("status", [
+  z.object({ status: z.literal("available"), replyableUntil: z.iso.datetime().optional() }),
+  z.object({ status: z.enum(ACTION_BLOCKERS) }),
+]);
+export type Action = z.infer<typeof actionSchema>;
 
 export type CredentialState = "ok" | "expired" | "insufficient_scope" | "revoked";
 

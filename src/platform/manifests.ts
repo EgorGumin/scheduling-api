@@ -5,7 +5,7 @@ import type { Platform } from "./types.js";
  * Replies with attachments are out of scope for now. The limits are declared
  * anyway, so supporting them later changes a number rather than the model.
  */
-const noAttachments = { maxCount: 0, mimeTypes: [], maxBytes: 0 } as const;
+const noAttachments = { maxCount: 0, mimeTypes: [], maxBytes: 0 };
 
 export const blueskyManifest: PlatformManifest = {
   platform: "bluesky",

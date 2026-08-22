@@ -57,6 +57,15 @@ async function commentId(externalId: string): Promise<string> {
   return encodeId("comment", rows[0]!.id);
 }
 
+describe("GET /v1/openapi.json", () => {
+  it("is readable without a key, so the contract can be fetched before one exists", async () => {
+    const response = await app.inject({ method: "GET", url: "/v1/openapi.json" });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({ openapi: "3.1.0" });
+  });
+});
+
 describe("GET /v1/comments", () => {
   it("returns the inbox newest first, with prefixed identifiers", async () => {
     const response = await app.inject({ method: "GET", url: "/v1/comments", headers: auth });

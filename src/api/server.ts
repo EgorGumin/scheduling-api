@@ -2,15 +2,18 @@ import Fastify, { type FastifyInstance } from "fastify";
 import { z } from "zod";
 import type { Database } from "../db/client.js";
 import {
+  capabilityDeclarationSchema,
   declareCapabilities,
   type Action,
   type PlatformManifest,
 } from "../platform/capabilities.js";
 import { enqueueReply, type RejectionReason } from "../domain/replies/enqueue.js";
-import { setHandling } from "../domain/triage.js";
+import { setHandling, triageStateSchema } from "../domain/triage.js";
 import { ApiError, sendProblem } from "./errors.js";
 import { channelPlatform, decodeCursor, getComment, listComments } from "./comments-query.js";
+import { openapiDocument } from "./openapi.js";
 import { replyStatus } from "./replies-query.js";
+import { commentPageSchema, commentViewSchema, replyStatusSchema } from "./schemas.js";
 import {
   actorOf,
   channelQuery,
@@ -27,6 +30,21 @@ export interface ServerDeps {
   readonly db: Database;
   readonly manifests: Readonly<Record<string, PlatformManifest>>;
   readonly authenticate?: Authenticate;
+}
+
+/**
+ * The last thing that happens to a response. A timestamp that came back from a
+ * raw SQL projection as something else fails here, before a client receives a
+ * field that matches nothing. A response that misses its schema is our bug, so
+ * it answers 500.
+ */
+function respond<T>(schema: z.ZodType<T>, value: NoInfer<T>): T {
+  const parsed = schema.safeParse(value);
+  if (parsed.success) {
+    return parsed.data;
+  }
+  console.error("response did not match its schema", z.treeifyError(parsed.error));
+  throw new ApiError("internal", "the response did not match its schema");
 }
 
 export function buildServer(deps: ServerDeps): FastifyInstance {
@@ -52,6 +70,10 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     return sendProblem(reply, new ApiError("internal", "unexpected failure"));
   });
 
+  // Generated from the same schemas every response below is parsed against. No
+  // authentication: describing the shapes should not need a key.
+  app.get("/v1/openapi.json", async () => openapiDocument());
+
   app.get("/v1/comments", async (request) => {
     const tenantId = tenantOf(request);
     const query = listQuery.parse(request.query);
@@ -72,11 +94,11 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
       ...(query.cursor && { cursor: query.cursor }),
     });
 
-    return {
+    return respond(commentPageSchema, {
       data: page.items,
       included: { posts: page.posts },
       page: { nextCursor: page.nextCursor },
-    };
+    });
   });
 
   app.get("/v1/comments/capabilities", async (request) => {
@@ -89,7 +111,7 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     if (manifest === undefined) {
       throw new ApiError("not_found", "no such channel");
     }
-    return declareCapabilities(manifest);
+    return respond(capabilityDeclarationSchema, declareCapabilities(manifest));
   });
 
   app.get("/v1/comments/:commentId", async (request) => {
@@ -100,7 +122,7 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     if (view === null) {
       throw new ApiError("not_found", "no such comment");
     }
-    return view;
+    return respond(commentViewSchema, view);
   });
 
   app.post("/v1/comments/:commentId/replies", async (request, reply) => {
@@ -121,10 +143,12 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
         throw new ApiError("not_found", "no such comment");
       case "rejected":
         throw rejectionToError(result);
+      // The row was written in the transaction that returned this outcome, so
+      // reading it back cannot come up empty.
       case "duplicate":
-        return reply.status(200).send(await replyStatus(deps.db, tenantId, result.replyId));
+        return reply.status(200).send(await statusOf(deps, tenantId, result.replyId));
       case "queued":
-        return reply.status(202).send(await replyStatus(deps.db, tenantId, result.replyId));
+        return reply.status(202).send(await statusOf(deps, tenantId, result.replyId));
     }
   });
 
@@ -135,7 +159,7 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     if (status === null) {
       throw new ApiError("not_found", "no such reply");
     }
-    return status;
+    return respond(replyStatusSchema, status);
   });
 
   app.patch("/v1/comments/:commentId/state", async (request) => {
@@ -149,10 +173,18 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     if (state === null) {
       throw new ApiError("not_found", "no such comment");
     }
-    return state;
+    return respond(triageStateSchema, state);
   });
 
   return app;
+}
+
+async function statusOf(deps: ServerDeps, tenantId: string, replyId: string) {
+  const status = await replyStatus(deps.db, tenantId, replyId);
+  if (status === null) {
+    throw new ApiError("internal", "the reply was written and then could not be read back");
+  }
+  return respond(replyStatusSchema, status);
 }
 
 function rejectionToError(result: { reason: RejectionReason; action?: Action }): ApiError {

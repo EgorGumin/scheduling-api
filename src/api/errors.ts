@@ -1,16 +1,20 @@
 import type { FastifyReply } from "fastify";
+import { z } from "zod";
 
-export type ErrorCode =
-  | "invalid_request"
-  | "unauthenticated"
-  | "not_found"
-  | "idempotency_conflict"
-  | "window_expired"
-  | "channel_unauthorized"
-  | "channel_insufficient_scope"
-  | "action_unavailable"
-  | "constraint_violated"
-  | "internal";
+export const ERROR_CODES = [
+  "invalid_request",
+  "unauthenticated",
+  "not_found",
+  "idempotency_conflict",
+  "window_expired",
+  "channel_unauthorized",
+  "channel_insufficient_scope",
+  "action_unavailable",
+  "constraint_violated",
+  "internal",
+] as const;
+
+export type ErrorCode = (typeof ERROR_CODES)[number];
 
 // Five refusals share 409: the request is well formed, the state refuses it,
 // and that state can change. 403 would mean the caller may never do this.
@@ -29,6 +33,17 @@ const STATUS: Record<ErrorCode, number> = {
   internal: 500,
 };
 
+/**
+ * RFC 9457. Extra keys pass through: a refusal may carry fields the caller can
+ * act on — the query parameters that failed, the action that was unavailable.
+ */
+export const problemSchema = z.looseObject({
+  type: z.string(),
+  title: z.enum(ERROR_CODES),
+  status: z.int(),
+  detail: z.string(),
+});
+
 export class ApiError extends Error {
   constructor(
     readonly code: ErrorCode,
@@ -45,11 +60,13 @@ export function sendProblem(reply: FastifyReply, error: ApiError): FastifyReply 
   return reply
     .status(status)
     .type("application/problem+json")
-    .send({
-      ...error.extra,
-      type: `about:blank#${error.code}`,
-      title: error.code,
-      status,
-      detail: error.detail,
-    });
+    .send(
+      problemSchema.parse({
+        ...error.extra,
+        type: `about:blank#${error.code}`,
+        title: error.code,
+        status,
+        detail: error.detail,
+      }),
+    );
 }

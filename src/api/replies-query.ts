@@ -2,17 +2,9 @@ import { and, eq } from "drizzle-orm";
 import type { Database } from "../db/client.js";
 import { outboundReplies } from "../db/schema.js";
 import { encodeId } from "./ids.js";
+import type { ReplyStatus } from "./schemas.js";
 
-/** What the platform was asked to do and how far it got. */
-export interface ReplyStatus {
-  readonly id: string;
-  readonly inReplyToCommentId: string;
-  readonly status: string;
-  readonly externalId: string | null;
-  readonly postedAt: string | null;
-  readonly error: { readonly code: string } | null;
-  readonly createdAt: string;
-}
+export type { ReplyStatus };
 
 export async function replyStatus(
   db: Database,
@@ -39,7 +31,8 @@ export async function replyStatus(
   return {
     id: encodeId("reply", row.id),
     inReplyToCommentId: encodeId("comment", row.inReplyToCommentId),
-    status: row.status,
+    // The column is text with a check constraint; the schema names the same set.
+    status: row.status as ReplyStatus["status"],
     externalId: row.externalId,
     postedAt: row.postedAt?.toISOString() ?? null,
     error: row.errorCode === null ? null : { code: row.errorCode },

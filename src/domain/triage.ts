@@ -1,4 +1,5 @@
 import { sql } from "drizzle-orm";
+import { z } from "zod";
 import type { Database } from "../db/client.js";
 
 /** What we decided about a comment; mirrors the check constraint on `comment_states`. */
@@ -11,12 +12,13 @@ export interface StatePatch {
   readonly note?: string | null | undefined;
 }
 
-export interface TriageState {
-  readonly handling: Handling;
-  readonly handledAt: string | null;
-  readonly handledBy: string | null;
-  readonly note: string | null;
-}
+export const triageStateSchema = z.object({
+  handling: z.enum(HANDLING),
+  handledAt: z.iso.datetime().nullable(),
+  handledBy: z.string().nullable(),
+  note: z.string().nullable(),
+});
+export type TriageState = z.infer<typeof triageStateSchema>;
 
 type Row = {
   handling: Handling;

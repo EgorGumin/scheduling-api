@@ -10,6 +10,9 @@ import {
 } from "../platform/capabilities.js";
 import type { Lifecycle, MediaRef, Platform } from "../platform/types.js";
 import { encodeId } from "./ids.js";
+import type { CommentView, PostRef } from "./schemas.js";
+
+export type { CommentView, PostRef };
 
 export interface InboxFilter {
   readonly tenantId: string;
@@ -21,32 +24,6 @@ export interface InboxFilter {
   readonly lifecycle?: readonly Lifecycle[];
   readonly limit: number;
   readonly cursor?: string;
-}
-
-export interface CommentView {
-  id: string;
-  channelId: string;
-  postId: string;
-  platform: Platform;
-  parentId: string | null;
-  depth: number;
-  author: { id: string; displayName: string | null; handle: string | null } | null;
-  body: string | null;
-  media: readonly MediaRef[];
-  direction: "inbound" | "outbound";
-  lifecycle: Lifecycle;
-  createdAt: string;
-  editedAt: string | null;
-  firstSeenAt: string;
-  /** Ours, not the platform's. `null` on a reply we sent: triage does not apply to it. */
-  state: {
-    handling: Handling;
-    handledAt: string | null;
-    handledBy: string | null;
-    note: string | null;
-  } | null;
-  actions: { reply: Action };
-  replyIds: readonly string[];
 }
 
 type Row = {
@@ -77,18 +54,9 @@ type Row = {
   reply_ids: string[] | null;
 };
 
-/** Side-loaded so a hundred comments on one post do not repeat it a hundred times. */
-export interface PostRef {
-  readonly id: string;
-  readonly preview: string | null;
-  readonly permalink: string | null;
-  readonly publishedAt: string | null;
-  readonly publisherPostId: string | null;
-}
-
 export interface InboxPage {
-  readonly items: readonly CommentView[];
-  readonly posts: readonly PostRef[];
+  readonly items: CommentView[];
+  readonly posts: PostRef[];
   readonly nextCursor: string | null;
 }
 

@@ -15,6 +15,11 @@ export function encodeId(kind: IdKind, uuid: string): string {
   return `${PREFIXES[kind]}_${uuid.replaceAll("-", "")}`;
 }
 
+/** The shape a client sees, for the wire schemas and the document. */
+export function idPattern(kind: IdKind): RegExp {
+  return new RegExp(`^${PREFIXES[kind]}_[0-9a-f]{32}$`);
+}
+
 export function decodeId(kind: IdKind, value: string): string | null {
   const prefix = `${PREFIXES[kind]}_`;
   if (!value.startsWith(prefix)) {

@@ -1,8 +1,12 @@
-export type Platform = "bluesky" | "instagram" | "facebook" | "youtube";
+/** The vocabularies are values because the wire schemas need them at runtime. */
+export const PLATFORMS = ["bluesky", "instagram", "facebook", "youtube"] as const;
+export type Platform = (typeof PLATFORMS)[number];
 
-export type Lifecycle = "active" | "hidden" | "deleted" | "unknown";
+export const LIFECYCLE = ["active", "hidden", "deleted", "unknown"] as const;
+export type Lifecycle = (typeof LIFECYCLE)[number];
 
-export type MediaKind = "image" | "video" | "gif" | "link_preview" | "unknown";
+export const MEDIA_KINDS = ["image", "video", "gif", "link_preview", "unknown"] as const;
+export type MediaKind = (typeof MEDIA_KINDS)[number];
 
 export interface MediaRef {
   readonly type: MediaKind;
