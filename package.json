@@ -11,6 +11,7 @@
     "db:down": "docker compose down -v",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx --env-file-if-exists=.env src/db/migrate.ts",
+    "db:migrate:test": "tsx --env-file=.env.test src/db/migrate.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:live": "vitest run --config vitest.live.config.ts",
