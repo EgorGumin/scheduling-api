@@ -1,0 +1,57 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: comments
+          POSTGRES_PASSWORD: comments
+          POSTGRES_DB: comments
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U comments"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run format:check
+      - run: npm run typecheck
+      - run: npm test
+
+      - run: npm run db:migrate
+
+      # docker-compose mounts this as an init script; a service container has no
+      # volume, so run it by hand.
+      - name: create the test database
+        run: |
+          PGPASSWORD=comments psql -h localhost -p 5433 -U comments -d comments \
+            -v ON_ERROR_STOP=1 -f scripts/db/init-test-database.sql
+
+      - run: npm run db:migrate:test
+      - run: npm run test:integration
+
+      - name: schema invariants
+        run: |
+          PGPASSWORD=comments psql -h localhost -p 5433 -U comments -d comments \
+            -v ON_ERROR_STOP=1 -f scripts/verify-schema.sql
+
+      # test:live is left out: it calls the live Bluesky API, and their outage
+      # would fail our build.
